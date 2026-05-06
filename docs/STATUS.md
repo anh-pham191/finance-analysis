@@ -2,25 +2,19 @@
 
 > Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed, decision made).
 
-**Last updated:** 2026-05-06 (post-spec-hardening)
+**Last updated:** 2026-05-06 (M1 implementation in progress)
 
 ## Current state
 
-- **Phase:** Design hardened after aggressive review; implementation has not started.
-- **Code in repo:** None. Only docs and `.gitignore`.
+- **Phase:** M1 implementation in progress on `feature/m1-skeleton-db`.
+- **Code in repo:** M1 skeleton, Postgres migrations, domain/ports, Postgres repos, CLI health/migrate/version, Makefile, and unit CI are being implemented.
 - **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — revised after review (RLS hardening, per-aggregate repos, M6 demoted, M8 split into M8a/M8b, akahu_tokens deferred to M8a, etc.). Approved by user.
 - **Architecture docs:** `docs/architecture/overview.md` and `docs/architecture/security.md` — current.
 - **Per-milestone briefs:** M1, M2, M3, M4, M5, M7, M8a, M8b under `docs/milestones/`. (No M6: Westpac is now a smoke-test acceptance under M2.)
 
 ## Next action
 
-**Write the implementation plan for M1.** Use the `superpowers:writing-plans` skill (or platform equivalent) to produce a detailed, step-by-step plan an executor can follow. Inputs:
-
-- M1 brief: `docs/milestones/M1-skeleton-and-db.md`
-- Spec sections: §3 Architecture, §4 Data model (especially RLS invariants), §11 Testing.
-- `docs/architecture/overview.md` and `docs/architecture/security.md` — RLS, app-role, `withUserTx` invariants.
-
-Land the plan at `docs/superpowers/plans/2026-05-06-M1-skeleton-and-db-plan.md` on a `feature/m1-plan` branch, PR into `develop`, user reviews before any code is written.
+Finish M1 verification and review on `feature/m1-skeleton-db`, then stage changes for human review. Do not commit without explicit approval.
 
 ## Branching
 
@@ -36,7 +30,7 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 
 | # | Title | Brief | Plan | Implementation |
 |---|---|---|---|---|
-| M1 | Skeleton & DB (RLS hardened) | ✅ written | ⏳ next action | ⏳ |
+| M1 | Skeleton & DB (RLS hardened) | ✅ written | ✅ written | 🚧 in progress |
 | M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ⏳ | ⏳ |
 | M3 | Categorisation | ✅ written | ⏳ | ⏳ |
 | M4 | Reporting MVP | ✅ written | ⏳ | ⏳ |
