@@ -28,6 +28,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.AddCommand(newMigrateCommand())
 	cmd.AddCommand(newRecatCommand(stdout, stderr))
 	cmd.AddCommand(newSyncCommand(stdout, stderr))
+	cmd.AddCommand(newUncategorisedCommand(stdout, stderr))
 	cmd.AddCommand(newUnrecatCommand(stdout, stderr))
 
 	return cmd
