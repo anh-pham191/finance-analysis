@@ -8,7 +8,9 @@ Entry points for anyone (human or agent) working on this project.
    `superpowers/specs/2026-05-06-finance-analysis-design.md`
 2. **Architecture overview** — the *why* behind the layout, kept short:
    `architecture/overview.md`
-3. **Milestone you're working on** — full context to act in isolation:
+3. **Security & privacy architecture** — multi-tenancy, secrets, encryption, deletion:
+   `architecture/security.md`
+4. **Milestone you're working on** — full context to act in isolation:
    `milestones/M{n}-*.md`
 
 ## Philosophy
@@ -34,3 +36,4 @@ This project follows the rules in
 | M5 | Polish | Pending |
 | M6 | Westpac | Future |
 | M7 | HTTP API | Future |
+| M8 | Multi-user (auth, encrypted tokens, signup, deletion) | Future |

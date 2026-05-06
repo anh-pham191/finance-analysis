@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# User-specific config (templates are committed as *.example.yaml)
+config/config.yaml
+config/rules.yaml
+
+# Real data fixtures (synthetic ones live in *.synthetic.json and ARE committed)
+**/fixtures/**/real.*
+**/fixtures/**/*.real.json
+
+# Database dumps — must be encrypted before leaving the host
+*.dump
+*.sql.gz
+*.sql.age
+*.sql.gpg
+
+# Go build artefacts
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

@@ -12,15 +12,21 @@ Pull transactions from Akahu (personal plan, ANZ account) into Postgres. Idempot
 - `internal/ingest/AkahuClient` port:
   - `ListAccounts(ctx) ([]RawAccount, error)`
   - `FetchTransactions(ctx, accountID string, since time.Time) ([]RawTxn, error)`
-- `internal/akahu/` HTTP adapter implementing the port. Uses `AKAHU_APP_TOKEN` and `AKAHU_USER_TOKEN` env vars. Honours pagination.
-- `internal/ingest/Sync(ctx, repo, akahu, clock)` use case:
-  - For each account known to Akahu, upsert into `accounts` table.
+- `internal/ingest/TokenStore` port:
+  - `AkahuTokens(ctx, userID) (app, user string, err error)`
+- `internal/akahu/` HTTP adapter implementing `AkahuClient`. Constructed with explicit `appToken, userToken string` — does not read env directly. Honours pagination.
+- `internal/akahu/EnvTokenStore` implementing `TokenStore` by reading `AKAHU_APP_TOKEN` / `AKAHU_USER_TOKEN`. Returns the same tokens regardless of `userID` (acceptable while the only user is `id=1`).
+- `internal/ingest/Sync(ctx, userID, repo, tokenStore, akahuFactory, clock)` use case:
+  - Resolve the user's Akahu tokens via `TokenStore`.
+  - Build an `AkahuClient` from those tokens via `akahuFactory`.
+  - For each account known to Akahu, upsert into `accounts` (with `user_id = userID`).
   - For each account, fetch txns since `sync_state.last_synced_at - 24h` (overlap window for late-posting).
-  - Upsert transactions (PK = Akahu txn id), preserve `created_at`.
-  - Update `sync_state.last_synced_at = clock.Now()`.
-- `finance sync` CLI command wiring all of the above.
-- Repository methods to support the above (extend M1's repository).
+  - Upsert transactions (PK = Akahu txn id, scoped by `user_id` in the `WHERE`), preserve `created_at`.
+  - Update `sync_state.last_synced_at = clock.Now()` for `(user_id, account_id)`.
+- `finance sync` CLI command wiring all of the above. Resolves dev user (`UserID(1)`).
+- Repository methods to support the above (extend M1's repository), all `userID`-scoped.
 - Loaded `.env` via `godotenv` in dev.
+- Slog redaction filter for token-shaped attributes — verified by a unit test that asserts a token logged at DEBUG comes out as `***`.
 
 ### Out
 - Webhook ingestion.
@@ -43,9 +49,11 @@ Pull transactions from Akahu (personal plan, ANZ account) into Postgres. Idempot
 
 ## Architecture context
 
-The `AkahuClient` port lives in `internal/ingest/` because that's the consumer. The HTTP adapter in `internal/akahu/` imports `ingest`'s interface and implements it.
+The `AkahuClient` and `TokenStore` ports live in `internal/ingest/` because that's the consumer. The HTTP adapter and `EnvTokenStore` in `internal/akahu/` import `ingest`'s interfaces and implement them.
 
-`internal/ingest/` knows nothing about HTTP. It works with `[]RawTxn` and translates them to `domain.Transaction` before calling the repository. This translation step is where Akahu-specific quirks (string→decimal, timezone normalisation, direction inference) get isolated.
+`internal/ingest/` knows nothing about HTTP. It works with `[]RawTxn` and translates them to `domain.Transaction` (with `user_id` set) before calling the repository. This translation step is where Akahu-specific quirks (string→decimal, timezone normalisation, direction inference) get isolated.
+
+The `TokenStore` indirection is the key piece for M8: swapping `EnvTokenStore` for `DBTokenStore` then is a wiring change, not a use-case change. Don't shortcut by reading env from inside the use case.
 
 `clock` is passed in as an interface (`type Clock interface{ Now() time.Time }`) so tests can freeze time. Production clock is `realClock{}.Now()`.
 

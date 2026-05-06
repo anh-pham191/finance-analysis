@@ -4,22 +4,25 @@
 
 ## Goal
 
-Stand up the project skeleton and a working Postgres database with migrated schema and a tested `Repository` implementation. After M1, an agent can write a transaction to Postgres and read it back via the domain types — nothing else.
+Stand up the project skeleton and a working Postgres database with migrated schema (including the multi-tenant scaffolding) and a tested user-scoped `Repository` implementation. After M1, an agent can write a transaction for a given user to Postgres and read it back via the domain types — nothing else.
+
+**Multi-tenancy from day 1:** every user-owned table has `user_id`, every repository method takes `userID UserID`, Postgres RLS is enabled and policies are written. M1 seeds `users(id=1, email='local@finance-analysis')` for single-user dev mode. The cross-tenant test pattern is established here so every later milestone has a template.
 
 ## Scope
 
 ### In
 - Repository layout per spec §3.
-- `go.mod` initialised at module path `github.com/anhpham/finance-analysis` (or whatever the user's chosen path is — confirm before init).
-- `docker-compose.yml` running Postgres 16 on `localhost:5432` with database `finance`, user `finance`, password `finance`.
-- `migrations/` with initial SQL migrations for all six tables in spec §4.
-- `internal/domain/` types: `Account`, `Transaction`, `Category`, `CategoryAssignment`, `Rule`, `SyncState`, `Direction`, `Money` wrapper around `shopspring/decimal`.
-- `internal/domain/ports/Repository` interface with the methods needed in M1 only (account + transaction CRUD; the rest land in their respective milestones).
-- `internal/storage/postgres/` implementing `Repository` for accounts and transactions, using `sqlc`-generated queries.
-- `cmd/cli/` skeleton with `cobra`, `finance migrate up|down` command using `golang-migrate`.
+- `go.mod` initialised at module path `github.com/anh-pham191/finance-analysis`.
+- `docker-compose.yml` running Postgres 16 on `localhost:5432` with database `finance`, user `finance`, password `finance` (dev-only password; documented as such).
+- `migrations/` with initial SQL migrations for all tables in spec §4 — `users`, `akahu_tokens` (schema only; encryption wired in M8), `accounts`, `transactions`, `categories`, `category_assignments`, `rules`, `sync_state`. Includes RLS policies and seed of `users(id=1, ...)`.
+- `internal/domain/` types: `UserID`, `Account`, `Transaction`, `Category`, `CategoryAssignment`, `Rule`, `SyncState`, `Direction`, `Money` wrapper around `shopspring/decimal`.
+- `internal/domain/ports/Repository` interface — every method takes `userID UserID` as the first non-context arg. Methods needed in M1 only (account + transaction CRUD); the rest land in their respective milestones.
+- `internal/storage/postgres/` implementing `Repository` using `sqlc`-generated queries, with `SET LOCAL app.user_id` issued per transaction so RLS policies bind.
+- `cmd/cli/` skeleton with `cobra`, `finance migrate up|down` command using `golang-migrate`. CLI commands resolve the single dev user (`UserID(1)`) and pass it through.
 - `Makefile` with `db-up`, `db-down`, `migrate`, `test`, `test-integration`, `lint` targets.
 - `golangci-lint` config (`.golangci.yml`).
-- `.env.example`, `.gitignore`.
+- `.gitignore` covering `.env`, `.env.local`, `config/config.yaml`, `config/rules.yaml`, `**/fixtures/**/real.*`, `*.dump`, `*.sql.gz`.
+- `.env.example`, `config/config.example.yaml`, `config/rules.example.yaml`.
 
 ### Out
 - Akahu adapter (M2).
@@ -56,11 +59,12 @@ Write tests in this order — each must fail first, then pass.
 
 1. `internal/domain/direction_test.go` — `ParseDirection("DEBIT")` returns enum; invalid input errors.
 2. `internal/domain/money_test.go` — wrapping decimal; addition; comparison; zero value.
-3. `internal/storage/postgres/repository_test.go` — uses testcontainers-go (or `docker-compose up` in CI):
-   - `InsertAccount` then `GetAccount` returns same fields.
-   - `InsertTransaction` upsert: same `id` updates `raw_json` but preserves `created_at`.
+3. `internal/storage/postgres/repository_test.go` — uses testcontainers-go:
+   - `InsertAccount(userID, ...)` then `GetAccount(userID, id)` returns same fields.
+   - `InsertTransaction(userID, ...)` upsert: same `id` updates `raw_json` but preserves `created_at`.
    - Query by `account_id` returns transactions ordered by `posted_at desc`.
-4. `cmd/cli/migrate_test.go` — invoking `finance migrate up` against a clean DB creates expected tables (assert via `pg_catalog`).
+   - **Cross-tenant test:** seed two users; user-A repo cannot read or write user-B's rows. RLS rejects cross-user access even when the SQL would otherwise match.
+4. `cmd/cli/migrate_test.go` — invoking `finance migrate up` against a clean DB creates expected tables (assert via `pg_catalog`) and seeds the dev user.
 
 ## Acceptance criteria
 

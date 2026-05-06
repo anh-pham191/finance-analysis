@@ -7,11 +7,13 @@ This document is the entry point for any agent working on the codebase. It expla
 ## Guiding principles
 
 1. **CLI today, API-ready always.** Every piece of business logic lives behind a function or method that does not import `cobra`, `net/http`, or any concrete adapter. The CLI is a thin presentation layer; the future HTTP API will be another thin presentation layer over the same core.
-2. **Ports and adapters (hexagonal).** Domain code defines interfaces it needs (`Repository`, `AkahuClient`). Adapters implement them. This keeps the domain testable with in-memory fakes and swappable in production.
-3. **Pure functions where possible.** Reporting and categorisation are deterministic functions of inputs. No hidden state, no clocks reached for from inside, no `time.Now()` deep in a helper — clocks and config are passed in.
-4. **TDD always.** Red, green, refactor. The test is written first. Tests describe behaviour, not implementation. Tests are not modified to silence a failing run.
-5. **YAGNI ruthlessly.** No abstractions, options, or flags that aren't needed by the current milestone. Three similar lines is better than a premature abstraction.
-6. **Composable over monolithic.** Small packages, one clear purpose each. If a file is hard to hold in your head, it's doing too much.
+2. **Single-user runtime, multi-tenant data model.** Every user-owned table has `user_id`. Every repository method takes `UserID`. Postgres RLS is on. M8 flips on the auth surface — it does not redesign anything.
+3. **Ports and adapters (hexagonal).** Domain code defines interfaces it needs (`Repository`, `AkahuClient`, `TokenStore`, `KeyProvider`). Adapters implement them. This keeps the domain testable with in-memory fakes and swappable in production.
+4. **Pure functions where possible.** Reporting and categorisation are deterministic functions of inputs. No hidden state, no clocks reached for from inside, no `time.Now()` deep in a helper — clocks and config are passed in.
+5. **TDD always.** Red, green, refactor. The test is written first. Tests describe behaviour, not implementation. Tests are not modified to silence a failing run.
+6. **Secrets out of the repo, out of logs, out of errors.** No exceptions. See `docs/architecture/security.md`.
+7. **YAGNI ruthlessly.** No abstractions, options, or flags that aren't needed by the current milestone. Three similar lines is better than a premature abstraction.
+8. **Composable over monolithic.** Small packages, one clear purpose each. If a file is hard to hold in your head, it's doing too much.
 
 ## Layer map
 
@@ -34,6 +36,7 @@ internal/domain/    no internal deps
 - `internal/domain/` MUST NOT import any other internal package.
 - `internal/{ingest,categorise,report}/` MUST NOT import `internal/akahu/` or `internal/storage/`.
 - `internal/{ingest,categorise,report}/` MUST NOT import `cobra` or `net/http`.
+- No package outside `internal/akahu/` and `cmd/` may read env vars directly. Config is loaded once at the boundary and passed in.
 
 ## Where things live
 
