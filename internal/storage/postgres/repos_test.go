@@ -69,6 +69,63 @@ func TestTxnRepoRoundTripAndTenantIsolation(t *testing.T) {
 	assertNotFound(t, err)
 }
 
+func TestTxnRepoPreservesStableFieldsOnCorrection(t *testing.T) {
+	db := newTestDatabase(t)
+	userID := seedUser(t, db.owner, "txn-correction-user@example.test")
+	accountRepo := NewAccountRepo(db.app)
+	txnRepo := NewTxnRepo(db.app)
+
+	account := domain.Account{ID: "acc-correction", Name: "Everyday", Bank: "ANZ", Type: "checking", Currency: "NZD"}
+	if err := accountRepo.Upsert(context.Background(), userID, account); err != nil {
+		t.Fatalf("upsert account: %v", err)
+	}
+
+	postedAt := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	txn := domain.Transaction{
+		ID:        "txn-correction",
+		AccountID: account.ID,
+		PostedAt:  postedAt,
+		Amount:    domain.MustMoneyFromString("10.00"),
+		Direction: domain.DirectionDebit,
+		RawJSON:   json.RawMessage(`{"version":1}`),
+	}
+	if err := txnRepo.Upsert(context.Background(), userID, txn); err != nil {
+		t.Fatalf("upsert initial txn: %v", err)
+	}
+
+	correctedTxn := domain.Transaction{
+		ID:        txn.ID,
+		AccountID: account.ID,
+		PostedAt:  time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+		Amount:    domain.MustMoneyFromString("99.00"),
+		Direction: domain.DirectionDebit,
+		RawJSON:   json.RawMessage(`{"version":2}`),
+	}
+	if err := txnRepo.Upsert(context.Background(), userID, correctedTxn); err != nil {
+		t.Fatalf("upsert corrected txn: %v", err)
+	}
+
+	got, err := txnRepo.Get(context.Background(), userID, txn.ID)
+	if err != nil {
+		t.Fatalf("get txn: %v", err)
+	}
+	if got.Amount.String() != "10.00" {
+		t.Fatalf("amount = %s, want 10.00", got.Amount.String())
+	}
+	if !got.PostedAt.Equal(postedAt) {
+		t.Fatalf("posted_at = %s, want %s", got.PostedAt.Format(time.RFC3339), postedAt.Format(time.RFC3339))
+	}
+	var raw struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(got.RawJSON, &raw); err != nil {
+		t.Fatalf("unmarshal raw_json: %v", err)
+	}
+	if raw.Version != 2 {
+		t.Fatalf("raw_json version = %d, want 2", raw.Version)
+	}
+}
+
 func TestCategoryRuleAssignmentAndSyncStateRepos(t *testing.T) {
 	db := newTestDatabase(t)
 	userID := seedUser(t, db.owner, "repo-user1@example.test")

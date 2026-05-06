@@ -2,19 +2,19 @@
 
 > Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed, decision made).
 
-**Last updated:** 2026-05-06 (M1 complete)
+**Last updated:** 2026-05-06 (M2 implementation in progress)
 
 ## Current state
 
-- **Phase:** M1 complete; ready to plan M2.
-- **Code in repo:** M1 skeleton, Postgres migrations, domain/ports, Postgres repos, CLI health/migrate/version, Makefile, and unit CI are merged to `develop`.
+- **Phase:** M2 implementation in progress on `feature/m2-akahu-ingest`.
+- **Code in repo:** M1 is merged; M2 Akahu ports, HTTP client, retry/redaction, token store, ingest mapping/sync, CLI sync, health Akahu check, and cross-tenant sync tests are in progress on the feature branch.
 - **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — revised after review (RLS hardening, per-aggregate repos, M6 demoted, M8 split into M8a/M8b, akahu_tokens deferred to M8a, etc.). Approved by user.
 - **Architecture docs:** `docs/architecture/overview.md` and `docs/architecture/security.md` — current.
 - **Per-milestone briefs:** M1, M2, M3, M4, M5, M7, M8a, M8b under `docs/milestones/`. (No M6: Westpac is now a smoke-test acceptance under M2.)
 
 ## Next action
 
-Write the implementation plan for M2 Akahu ingest. Use `superpowers:writing-plans` against `docs/milestones/M2-akahu-ingest.md`, spec §5 and §11, and the M1 repository patterns now merged in `develop`.
+Finish M2 verification, including local integration tests and real Akahu smoke tests for ANZ and Westpac, then open a PR into `develop`.
 
 ## Branching
 
@@ -31,7 +31,7 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 | # | Title | Brief | Plan | Implementation |
 |---|---|---|---|---|
 | M1 | Skeleton & DB (RLS hardened) | ✅ written | ✅ written | ✅ complete |
-| M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ⏳ | ⏳ |
+| M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ✅ written | 🚧 in progress |
 | M3 | Categorisation | ✅ written | ⏳ | ⏳ |
 | M4 | Reporting MVP | ✅ written | ⏳ | ⏳ |
 | M5 | Polish | ✅ written | ⏳ | ⏳ |

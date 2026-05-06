@@ -3,9 +3,11 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/anh-pham191/finance-analysis/internal/domain"
+	"github.com/anh-pham191/finance-analysis/internal/ports"
 )
 
 type SyncStateRepo struct {
@@ -44,7 +46,7 @@ func (r *SyncStateRepo) Get(ctx context.Context, userID domain.UserID, accountID
 		`, userID.Int64(), accountID).Scan(&state.AccountID, &lastSynced, &cursor)
 	})
 	if err != nil {
-		return domain.SyncState{}, err
+		return domain.SyncState{}, syncStateGetError(err)
 	}
 	if lastSynced.Valid {
 		state.LastSyncedAt = &lastSynced.Time
@@ -53,4 +55,11 @@ func (r *SyncStateRepo) Get(ctx context.Context, userID domain.UserID, accountID
 		state.LastCursor = &cursor.String
 	}
 	return state, nil
+}
+
+func syncStateGetError(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return ports.ErrNotFound
+	}
+	return err
 }

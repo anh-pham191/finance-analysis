@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/anh-pham191/finance-analysis/internal/domain"
+	"github.com/anh-pham191/finance-analysis/internal/ports"
 )
 
 func TestWithUserTxScopesQueriesToUser(t *testing.T) {
@@ -87,7 +88,7 @@ func seedUser(t *testing.T, db *sql.DB, email string) domain.UserID {
 
 func assertNotFound(t *testing.T, err error) {
 	t.Helper()
-	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("error = %v, want sql.ErrNoRows", err)
+	if !errors.Is(err, sql.ErrNoRows) && !errors.Is(err, ports.ErrNotFound) {
+		t.Fatalf("error = %v, want sql.ErrNoRows or ports.ErrNotFound", err)
 	}
 }
