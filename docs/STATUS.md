@@ -2,19 +2,19 @@
 
 > Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed, decision made).
 
-**Last updated:** 2026-05-06 (M1 implementation in progress)
+**Last updated:** 2026-05-06 (M1 complete)
 
 ## Current state
 
-- **Phase:** M1 implementation in progress on `feature/m1-skeleton-db`.
-- **Code in repo:** M1 skeleton, Postgres migrations, domain/ports, Postgres repos, CLI health/migrate/version, Makefile, and unit CI are being implemented.
+- **Phase:** M1 complete; ready to plan M2.
+- **Code in repo:** M1 skeleton, Postgres migrations, domain/ports, Postgres repos, CLI health/migrate/version, Makefile, and unit CI are merged to `develop`.
 - **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — revised after review (RLS hardening, per-aggregate repos, M6 demoted, M8 split into M8a/M8b, akahu_tokens deferred to M8a, etc.). Approved by user.
 - **Architecture docs:** `docs/architecture/overview.md` and `docs/architecture/security.md` — current.
 - **Per-milestone briefs:** M1, M2, M3, M4, M5, M7, M8a, M8b under `docs/milestones/`. (No M6: Westpac is now a smoke-test acceptance under M2.)
 
 ## Next action
 
-Finish M1 verification and review on `feature/m1-skeleton-db`, then stage changes for human review. Do not commit without explicit approval.
+Write the implementation plan for M2 Akahu ingest. Use `superpowers:writing-plans` against `docs/milestones/M2-akahu-ingest.md`, spec §5 and §11, and the M1 repository patterns now merged in `develop`.
 
 ## Branching
 
@@ -30,7 +30,7 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 
 | # | Title | Brief | Plan | Implementation |
 |---|---|---|---|---|
-| M1 | Skeleton & DB (RLS hardened) | ✅ written | ✅ written | 🚧 in progress |
+| M1 | Skeleton & DB (RLS hardened) | ✅ written | ✅ written | ✅ complete |
 | M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ⏳ | ⏳ |
 | M3 | Categorisation | ✅ written | ⏳ | ⏳ |
 | M4 | Reporting MVP | ✅ written | ⏳ | ⏳ |
@@ -41,15 +41,6 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 
 Legend: ✅ done · ⏳ pending · 🚧 in progress · ❌ blocked.
 
-## Branching
-
-This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branching.md) for the full convention.
-
-- `main` — stable; updated only via `develop → main` release PRs.
-- `develop` — integration; all work PRs merge here.
-- `feature/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` — branched off `develop`, PR'd into `develop`.
-
-**Never commit directly to `main` or `develop`.**
 (M6 — Westpac — folded into M2 acceptance as a smoke-test verification.)
 
 ## Decisions log
