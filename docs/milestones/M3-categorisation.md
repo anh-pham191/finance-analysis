@@ -4,76 +4,89 @@
 
 ## Goal
 
-Apply user-authored rules from `config/rules.yaml` to all ingested transactions, producing a `category_assignments` row per transaction. Manual overrides via `finance recat` always win.
+Apply user-authored matching rules from `config/rules.yaml` against a user-declared taxonomy in `config/categories.yaml` to produce a `category_assignments` row per transaction. Manual overrides (`MANUAL`) always win and survive rule edits. Re-running is **convergent** — same inputs produce same outputs, with zero writes when nothing changed.
 
 ## Scope
 
 ### In
-- `internal/categorise/Rule` type matching the YAML predicate fields.
-- YAML loader: `LoadRules(path) ([]Rule, error)`. Validates priorities are unique-or-stable-ordered, regex compiles, referenced categories exist (auto-create category rows on apply).
-- `internal/categorise/Apply(txn, rules) (*Assignment, bool)` — pure function, returns first match.
-- `internal/categorise/Categorise(ctx, repo, rules)` — use case that walks all txns lacking a `MANUAL` assignment and writes/updates `category_assignments` with `source = RULE`.
-- `finance categorise` command — runs the use case.
-- `finance recat <txn-id> <category>` command — writes a `MANUAL` assignment, creating the category if needed.
-- `finance uncategorised` command — lists transactions whose assignment is `Uncategorised`.
-- Repository extensions: get/upsert categories, get/upsert assignments, list uncategorised.
+- `config/categories.example.yaml` — taxonomy template (per spec §6).
+- `config/rules.example.yaml` — matching rules template.
+- `internal/categorise/`:
+  - `Category{Name, Kind, Parent}` and `Rule{Name, Priority, Predicate, Category}` types.
+  - `LoadCategories(path)` and `LoadRules(path)` — validate kinds, parent references, regex compiles, and rule->category references at load time.
+  - `Apply(txn, rules) (*Assignment, bool)` — pure first-match function. Tiebreaker: priority asc, then `name` asc.
+  - `Categorise(ctx, userID, deps)` — use case:
+    - Reconcile `categories` table: upsert from yaml by `(user_id, name)`; update kind/parent. **Never delete** (manual SQL only — protects `category_id` FKs).
+    - Reconcile `rules` table: upsert from yaml by `(user_id, name)`; **delete rules absent from yaml**. `category_assignments.rule_id` becomes NULL via `ON DELETE SET NULL`.
+    - For every transaction whose assignment is not `MANUAL`, evaluate rules and write the assignment **only if `category_id` or `rule_id` actually changes**.
+- CLI commands:
+  - `finance categorise` — runs the use case end-to-end.
+  - `finance recat <txn-id> <category>` — sets a `MANUAL` assignment. Errors if the category isn't declared in `categories.yaml`.
+  - `finance unrecat <txn-id>` — clears the `MANUAL` assignment so the next `categorise` re-evaluates.
+  - `finance uncategorised` — lists txns currently in `Uncategorised`.
+- Repository extensions: category upsert/list/find-by-name; rule upsert/delete-missing/list; assignment upsert-on-change/get-by-txn/list-uncategorised.
 
 ### Out
 - Reporting (M4).
-- Rule OR-semantics, rule groups, rule expiry (revisit in spec §14 open questions).
+- Rule OR-semantics, rule groups, rule expiry — see spec §15 open questions.
 
 ## Prerequisites
 
-- M2 complete and green; transactions populated.
+- M2 complete; transactions populated.
 
 ## Deliverables
 
-- [ ] Example `config/rules.yaml` shipped (in `config/rules.example.yaml`).
-- [ ] `finance categorise` is idempotent — running twice produces no diff.
-- [ ] `finance recat` overrides a rule-based assignment and survives subsequent `finance categorise` runs.
-- [ ] Re-running `finance categorise` after editing `rules.yaml` correctly re-categorises any non-manual txns.
-- [ ] `finance uncategorised` lists exactly the txns where no rule matched.
-- [ ] Unit tests for the rule engine cover every predicate field independently and in combination.
+- [ ] Example yaml files committed.
+- [ ] `finance categorise` is convergent: re-running on stable state produces zero writes (asserted by capturing tx counts before/after).
+- [ ] Editing a rule and re-running correctly reassigns affected non-manual txns; `assigned_at` updates only on real changes.
+- [ ] Removing a rule from yaml deletes the `rules` row; affected assignments become unmatched (re-evaluated on next pass).
+- [ ] `MANUAL` assignments survive `finance categorise` runs and survive rule deletions.
+- [ ] `recat` with a non-existent category errors clearly (lists candidate categories).
+- [ ] `unrecat` followed by `categorise` returns the txn to its rule-derived assignment.
+- [ ] Cross-tenant test: rules and assignments isolated per user.
 
 ## Architecture context
 
-The rule engine is a pure function. No DB access, no logging, no file I/O. The use case orchestrates: load rules → fetch txns → apply rule → write assignment. This separation lets us table-test the engine exhaustively with cheap in-memory fixtures.
+Two yamls, two concerns. The taxonomy is stable; rules churn. Letting rules implicitly create categories was the original spec's mistake — it forced `kind` to be guessed from a rule, which can't work for the check constraint. With the split, the taxonomy is declared up-front and rules just reference names that already exist.
 
-Categories are auto-created on first reference by name. The `name` is the natural key and uses `/` for hierarchy (e.g. `Food/Groceries`). Parent categories are auto-created too.
-
-`source` precedence on read: `MANUAL > RULE > AKAHU`. The `Apply` function never produces `AKAHU`; that source is reserved for a possible future fallback that uses Akahu's own enrichment.
+Rules use `(user_id, name)` as the natural key so reloads are upsert-and-prune, not truncate-and-reinsert. This keeps `rules.id` stable across yaml edits, which keeps `category_assignments.rule_id` meaningful.
 
 ## Test plan (TDD)
 
-1. `internal/categorise/rule_test.go` — table-driven tests, one per predicate field.
-2. `internal/categorise/loader_test.go` — valid YAML loads; invalid regex errors with line context; missing category name errors.
-3. `internal/categorise/categorise_test.go` (in-memory repo):
-   - First run assigns all matching txns; unmatched get `Uncategorised`.
-   - Second run is a no-op (no writes if already correct).
-   - Editing a rule and re-running updates non-manual assignments.
-   - `MANUAL` assignments are not touched.
-4. `cmd/cli/recat_test.go` — `finance recat` writes `MANUAL` and survives `categorise`.
-5. `cmd/cli/uncategorised_test.go` — only returns rows whose category is `Uncategorised`.
+1. `internal/categorise/predicate_test.go` — table-driven, one case per predicate field, plus combinations (AND-semantics).
+2. `internal/categorise/loader_test.go`:
+   - Categories: valid yaml loads; missing `kind` errors; orphan `parent` errors.
+   - Rules: missing referenced category errors; bad regex errors with line context; duplicate rule names error.
+3. `internal/categorise/apply_test.go` — first-match; tiebreaker on equal priority.
+4. `internal/categorise/categorise_test.go`:
+   - Convergence: run twice, second run does zero assignment writes.
+   - Rule edit changes assignments; `assigned_at` moves only on changed rows.
+   - Rule deletion → assignment becomes unmatched → next pass falls through to `Uncategorised`.
+   - `MANUAL` survives all of the above.
+5. `cmd/cli/recat_test.go` — manual override, error on unknown category.
+6. `cmd/cli/unrecat_test.go` — clears `MANUAL`, next `categorise` re-derives.
+7. `cmd/cli/uncategorised_test.go` — only returns rows in `Uncategorised`.
 
 ## Acceptance criteria
 
 - All deliverables ticked.
-- A real-data smoke test: run against the user's actual transactions, inspect `finance uncategorised` output, write a rule, re-run, verify shrinkage.
+- Real-data smoke test: run `finance categorise` against the user's actual M2-ingested txns, run `uncategorised`, write a rule, re-run, list shrinks.
 
 ## Files an agent will touch
 
 ```
+config/categories.example.yaml
 config/rules.example.yaml
-internal/categorise/{rule.go, rule_test.go, loader.go, loader_test.go,
-                    categorise.go, categorise_test.go}
-internal/storage/postgres/repository.go (extend)
+internal/categorise/{predicate.go, loader.go, apply.go, categorise.go, *_test.go}
+internal/storage/postgres/{category.go, rule.go, assignment.go} (extend)
 internal/storage/postgres/queries.sql (extend)
-cmd/cli/{categorise.go, recat.go, uncategorised.go, *_test.go}
+cmd/cli/{categorise.go, recat.go, unrecat.go, uncategorised.go, *_test.go}
 ```
 
 ## Pitfalls
 
-- Regex compilation failures must be surfaced at load time, not at apply time. Fail fast.
-- Idempotency: don't `INSERT ... ON CONFLICT` blindly with a new `assigned_at`. Only update when category actually changes.
-- Auto-creating categories: do it in a transaction with a unique constraint to avoid races (currently single-user so unlikely, but cheap to do right).
-- A rule that no longer matches a previously-categorised txn must move it back to `Uncategorised`, not leave the stale category.
+- Don't auto-create categories from rules — `kind` can't be inferred. Force the user to declare them in `categories.yaml`.
+- Don't delete categories from yaml absence; their FKs in `assignments` and `rules` would block. Manual SQL only.
+- Don't truncate-and-reinsert rules; that destabilises `rules.id`. Upsert by `(user_id, name)` and delete missing.
+- Don't update `assigned_at` on every run — only when the assignment actually changed. Convergence depends on this.
+- Regex compilation failures must surface at load, not at apply. Fail fast.

@@ -1,39 +1,49 @@
 # STATUS — where we are, what's next
 
-> Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed).
+> Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed, decision made).
 
-**Last updated:** 2026-05-06
+**Last updated:** 2026-05-06 (post-spec-hardening)
 
 ## Current state
 
-- **Phase:** Design approved; implementation has not started.
+- **Phase:** Design hardened after aggressive review; implementation has not started.
 - **Code in repo:** None. Only docs and `.gitignore`.
-- **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — approved by the user.
+- **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — revised after review (RLS hardening, per-aggregate repos, M6 demoted, M8 split into M8a/M8b, akahu_tokens deferred to M8a, etc.). Approved by user.
 - **Architecture docs:** `docs/architecture/overview.md` and `docs/architecture/security.md` — current.
-- **Per-milestone briefs:** M1–M8 written under `docs/milestones/`.
+- **Per-milestone briefs:** M1, M2, M3, M4, M5, M7, M8a, M8b under `docs/milestones/`. (No M6: Westpac is now a smoke-test acceptance under M2.)
 
 ## Next action
 
-**Write the implementation plan for M1.** Use the `superpowers:writing-plans` skill (or equivalent on your platform) to produce a detailed, step-by-step plan that an executor can follow. Inputs:
+**Write the implementation plan for M1.** Use the `superpowers:writing-plans` skill (or platform equivalent) to produce a detailed, step-by-step plan an executor can follow. Inputs:
 
 - M1 brief: `docs/milestones/M1-skeleton-and-db.md`
-- Spec sections referenced there (§3 Architecture, §4 Data model, §11 Testing).
-- Architecture overview and security doc — for invariants the plan must respect.
+- Spec sections: §3 Architecture, §4 Data model (especially RLS invariants), §11 Testing.
+- `docs/architecture/overview.md` and `docs/architecture/security.md` — RLS, app-role, `withUserTx` invariants.
 
-The plan should land at `docs/superpowers/plans/2026-05-06-M1-skeleton-and-db-plan.md` and be reviewed by the user before any code is written.
+Land the plan at `docs/superpowers/plans/2026-05-06-M1-skeleton-and-db-plan.md` on a `feature/m1-plan` branch, PR into `develop`, user reviews before any code is written.
+
+## Branching
+
+This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branching.md).
+
+- `main` — stable; updated only via `develop → main` release PRs.
+- `develop` — integration; all work PRs merge here. **Default branch on GitHub.**
+- `feature/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` — branched off `develop`, PR'd into `develop`.
+
+**Never commit directly to `main` or `develop`.**
 
 ## Milestone tracker
 
 | # | Title | Brief | Plan | Implementation |
 |---|---|---|---|---|
-| M1 | Skeleton & DB | ✅ written | ⏳ next action | ⏳ |
-| M2 | Akahu ingest | ✅ written | ⏳ | ⏳ |
+| M1 | Skeleton & DB (RLS hardened) | ✅ written | ⏳ next action | ⏳ |
+| M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ⏳ | ⏳ |
 | M3 | Categorisation | ✅ written | ⏳ | ⏳ |
 | M4 | Reporting MVP | ✅ written | ⏳ | ⏳ |
 | M5 | Polish | ✅ written | ⏳ | ⏳ |
-| M6 | Westpac | ✅ written | ⏳ | ⏳ |
-| M7 | HTTP API | ✅ written | ⏳ | ⏳ |
-| M8 | Multi-user | ✅ written | ⏳ | ⏳ |
+| M7 | HTTP API (Authenticator port) | ✅ written | ⏳ | ⏳ |
+| M8a | Auth & encrypted token store | ✅ written | ⏳ | ⏳ |
+| M8b | Rotation, rules-in-DB, audit, deletion | ✅ written | ⏳ | ⏳ |
 
 Legend: ✅ done · ⏳ pending · 🚧 in progress · ❌ blocked.
 
@@ -46,6 +56,7 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 - `feature/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` — branched off `develop`, PR'd into `develop`.
 
 **Never commit directly to `main` or `develop`.**
+(M6 — Westpac — folded into M2 acceptance as a smoke-test verification.)
 
 ## Decisions log
 
@@ -56,9 +67,20 @@ Record decisions made outside of the spec here so they survive across sessions a
 - **2026-05-06** — Postgres chosen over SQLite for forward compatibility with the multi-user web service.
 - **2026-05-06** — Akahu integration: on-demand pull only for MVP; webhooks deferred.
 - **2026-05-06** — Adopted Git Flow-lite branching: `main` / `develop` long-lived, `feature/*` and `fix/*` short-lived, all changes via PR. Convention in `docs/process/branching.md`.
+- **2026-05-06** — Default branch on GitHub set to `develop` so cloners land on integration, not main.
+- **2026-05-06** (post-review) — RLS implementation hardened: `FORCE ROW LEVEL SECURITY` on every table; dedicated `finance_app` non-owner role; every repo call wrapped in `withUserTx` with `SET LOCAL`. Documented in spec §4 and security doc.
+- **2026-05-06** (post-review) — `Repository` god interface split into per-aggregate ports (`AccountRepo`, `TxnRepo`, etc.) under `internal/ports/`.
+- **2026-05-06** (post-review) — Categorisation split: `categories.yaml` declares taxonomy with `kind`; `rules.yaml` declares matching predicates referencing category names. Solves the `kind`-not-derivable-from-rule problem.
+- **2026-05-06** (post-review) — `akahu_tokens` table deferred from M1 to M8a, with `key_version` + per-ciphertext nonces from day one. M1 stays focused; encryption schema is designed once against real rotation requirements.
+- **2026-05-06** (post-review) — M6 demoted to smoke-test acceptance under M2.
+- **2026-05-06** (post-review) — M8 split into M8a (auth + encrypted tokens) and M8b (rotation + rules-in-DB + audit + deletion).
+- **2026-05-06** (post-review) — `Authenticator` port introduced in M7 (not M8) so M8a's `SessionAuthenticator` extends rather than swaps.
+- **2026-05-06** (post-review) — ISO weeks Monday-start (8601). First-sync default lookback 30d. Renderers `io.Writer`-based. JSON tags on DTOs from M4. archtest mandated from M1.
 
 ## Open decisions (not blocking implementation)
 
-- Production master key location for M8 (KMS vs sealed-secret vs env on hardened host) — decide at M8 kickoff based on hosting choice.
-- Self-hosted single shared instance vs hosted SaaS for M8+ — default assumption is self-hosted shared instance.
+- Production master key location for M8b/multi-user (KMS vs sealed-secret vs env on hardened host) — decide at M8a kickoff based on hosting choice.
+- Self-hosted single shared instance vs hosted SaaS for M8a+ — default assumption is self-hosted shared instance.
 - Whether to vendor `golang-migrate` as a library or shell out to its CLI — decide during M1 plan.
+- Akahu transaction corrections (different amount for same id) — current: keep amount stable, refresh raw_json. Revisit if observed.
+- Akahu account un-link — current: keep, mark `enabled=false` once that flag exists.

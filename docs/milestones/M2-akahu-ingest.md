@@ -1,97 +1,100 @@
 # M2 — Akahu Ingest
 
-> Spec reference: §5 Akahu sync. Architecture: `docs/architecture/overview.md`. Builds on M1.
+> Spec reference: §5 Akahu sync, §8 secrets. Architecture: `docs/architecture/security.md`. Builds on M1.
 
 ## Goal
 
-Pull transactions from Akahu (personal plan, ANZ account) into Postgres. Idempotent — running `finance sync` twice in a row results in no duplicate rows and no lost data.
+Pull transactions from Akahu (personal plan) into Postgres, idempotently, with safe retry/backoff and zero token leakage. By end of M2, `finance sync` works against the user's real ANZ account and — as a smoke-test acceptance — against Westpac too once the user adds it in their Akahu dashboard.
 
 ## Scope
 
 ### In
-- `internal/ingest/AkahuClient` port:
+- `internal/ports/AkahuClient`:
   - `ListAccounts(ctx) ([]RawAccount, error)`
-  - `FetchTransactions(ctx, accountID string, since time.Time) ([]RawTxn, error)`
-- `internal/ingest/TokenStore` port:
-  - `AkahuTokens(ctx, userID) (app, user string, err error)`
-- `internal/akahu/` HTTP adapter implementing `AkahuClient`. Constructed with explicit `appToken, userToken string` — does not read env directly. Honours pagination.
-- `internal/akahu/EnvTokenStore` implementing `TokenStore` by reading `AKAHU_APP_TOKEN` / `AKAHU_USER_TOKEN`. Returns the same tokens regardless of `userID` (acceptable while the only user is `id=1`).
-- `internal/ingest/Sync(ctx, userID, repo, tokenStore, akahuFactory, clock)` use case:
-  - Resolve the user's Akahu tokens via `TokenStore`.
-  - Build an `AkahuClient` from those tokens via `akahuFactory`.
-  - For each account known to Akahu, upsert into `accounts` (with `user_id = userID`).
-  - For each account, fetch txns since `sync_state.last_synced_at - 24h` (overlap window for late-posting).
-  - Upsert transactions (PK = Akahu txn id, scoped by `user_id` in the `WHERE`), preserve `created_at`.
-  - Update `sync_state.last_synced_at = clock.Now()` for `(user_id, account_id)`.
-- `finance sync` CLI command wiring all of the above. Resolves dev user (`UserID(1)`).
-- Repository methods to support the above (extend M1's repository), all `userID`-scoped.
-- Loaded `.env` via `godotenv` in dev.
-- Slog redaction filter for token-shaped attributes — verified by a unit test that asserts a token logged at DEBUG comes out as `***`.
+  - `FetchTransactions(ctx, accountID string, since time.Time) ([]RawTxn, error)` (handles pagination internally)
+- `internal/ports/TokenStore` — already declared in M1 if not; otherwise add here.
+- `internal/akahu/`:
+  - `Client` implementing `AkahuClient`. Constructed with explicit `appToken, userToken, baseURL string` — does not read env directly.
+  - **Retry policy:** `429` and `5xx` retried up to 3 times with exponential backoff `1s, 2s, 4s` ±25% jitter; honours `Retry-After`; respects `ctx`.
+  - **Pagination:** cursor-loop until `next == ""`.
+  - `EnvTokenStore` implementing `TokenStore` — reads `AKAHU_APP_TOKEN`, `AKAHU_USER_TOKEN`. Returns same tokens regardless of `userID` (intentional MVP weakening, called out in code comment + test).
+- `internal/ingest/Sync(ctx, userID, deps)` use case:
+  - Resolve tokens via `TokenStore`.
+  - Build `AkahuClient` from tokens (`akahuFactory` injected).
+  - List accounts → upsert.
+  - For each account: fetch since `max(sync_state.last_synced_at - 24h, now - 30d if first sync)`.
+  - Upsert transactions via `(user_id, id)` conflict target.
+  - Update `sync_state` for `(user_id, account_id)` with `last_synced_at = clock.Now()`.
+- `cmd/cli/sync.go` — `finance sync [--from DATE]` wired to dev user (`UserID(1)`). `--from` overrides the 30d default.
+- Slog redaction filter (key-side + value-side per security doc) — wired in CLI bootstrap, tested.
+- `finance health` (already in M1) extended to include an Akahu reachability check.
 
 ### Out
-- Webhook ingestion.
-- Westpac (just adding the Akahu connection in the user's Akahu dashboard would work; nothing here is bank-specific).
+- Webhook ingestion (future).
 - Categorisation (M3).
 
 ## Prerequisites
 
 - M1 complete and green.
-- User has signed up for Akahu personal plan and connected ANZ.
-- User has generated `AKAHU_APP_TOKEN` and `AKAHU_USER_TOKEN`.
+- User has Akahu personal-plan tokens. ANZ connected.
 
 ## Deliverables
 
-- [ ] `finance sync` populates `accounts` and `transactions` from Akahu.
-- [ ] Re-running `finance sync` immediately after produces zero new rows and zero updates beyond `updated_at`/`raw_json`.
-- [ ] `sync_state` is correctly maintained per account.
-- [ ] Unit tests with in-memory `AkahuClient` fake covering: first sync, incremental sync, late-posting overlap, account creation, idempotency.
-- [ ] Integration test for `internal/akahu/` against `httptest.NewServer` fixtures.
+- [ ] `finance sync` populates `accounts` and `transactions` from Akahu (real smoke-test).
+- [ ] **Westpac smoke-test acceptance:** user connects Westpac in their Akahu dashboard, re-runs `finance sync`, Westpac txns appear with no code change. M2 acceptance includes this verification step.
+- [ ] Re-running `finance sync` immediately produces zero new rows; `updated_at` may move on `transactions` if Akahu re-enriched, but `created_at`, `amount`, `posted_at` are preserved.
+- [ ] First sync (no `sync_state` row) defaults to 30d lookback; `--from 2024-01-01` override works.
+- [ ] Retry test: stub server returns 429 twice then 200; client succeeds. Stub returns 500 four times; client errors after 3 retries.
+- [ ] **Token-redaction tests** — both pass:
+  - Slog: emit a structured log with key `app_token` and a real-shaped value; captured output contains `***`.
+  - Error wrapping: stub returns body containing `Authorization: Bearer abc123def...`; the resulting wrapped error string does NOT contain `abc123def...`.
+- [ ] **`raw_json` redaction test:** force a parse error after Akahu returns a row; the resulting error chain contains the txn id but no `raw_json` content.
+- [ ] Cross-tenant test: seed `EnvTokenStore` to return user A's tokens; call `Sync(ctx, userIDA)` and `Sync(ctx, userIDB)`; assert each user only sees their own rows. (Confirms RLS isolation extends through the ingest path even with the shared-token EnvTokenStore.)
 
 ## Architecture context
 
-The `AkahuClient` and `TokenStore` ports live in `internal/ingest/` because that's the consumer. The HTTP adapter and `EnvTokenStore` in `internal/akahu/` import `ingest`'s interfaces and implement them.
+The `EnvTokenStore` returning the same tokens for any `userID` is a deliberate, documented multi-tenancy weakening. M8a swaps in `DBTokenStore` and re-runs sync's cross-tenant tests with per-user real tokens.
 
-`internal/ingest/` knows nothing about HTTP. It works with `[]RawTxn` and translates them to `domain.Transaction` (with `user_id` set) before calling the repository. This translation step is where Akahu-specific quirks (string→decimal, timezone normalisation, direction inference) get isolated.
+`Clock` (port from M1) is injected; tests freeze time. No `time.Now()` outside the clock.
 
-The `TokenStore` indirection is the key piece for M8: swapping `EnvTokenStore` for `DBTokenStore` then is a wiring change, not a use-case change. Don't shortcut by reading env from inside the use case.
-
-`clock` is passed in as an interface (`type Clock interface{ Now() time.Time }`) so tests can freeze time. Production clock is `realClock{}.Now()`.
+Adapter is constructed per-sync from `akahuFactory(appToken, userToken) AkahuClient` so tests can inject a fake without env at all.
 
 ## Test plan (TDD)
 
-1. `internal/ingest/sync_test.go` (with fake client + in-memory repo):
-   - First sync inserts accounts and transactions.
-   - Second sync with same fake data: no duplicates.
-   - New transactions arriving in second sync get inserted.
-   - `sync_state` is per-account and updated.
-   - Late-posting: a txn dated before `last_synced_at` but inside the overlap window is captured.
-2. `internal/akahu/client_test.go`:
-   - GET `/transactions/{accountId}` with `start` query param hits expected URL.
-   - Pagination: cursor-based fetch loops until `cursor.next == nil`.
-   - Auth headers present.
-   - Non-2xx response surfaces a wrapped error with body excerpt.
-3. `cmd/cli/sync_test.go`:
-   - End-to-end with testcontainers Postgres + `httptest` Akahu server.
+1. `internal/akahu/retry_test.go` — backoff timing, jitter bounds, Retry-After honoured, 4xx-not-429 fails fast, ctx cancellation cancels mid-backoff.
+2. `internal/akahu/client_test.go` — pagination loop; auth headers present; non-2xx wraps body excerpt with token redaction; malformed JSON → typed error.
+3. `internal/ingest/sync_test.go` (in-memory fakes for repos + AkahuClient + TokenStore + Clock):
+   - First sync inserts accounts and txns.
+   - Second sync: idempotent for unchanged data.
+   - 24h overlap window catches late-posting txn.
+   - First-sync 30d default; `--from` override.
+   - `sync_state` per (user, account).
+4. `internal/observability/redaction_test.go` — both layers (key + value scanner) tested with golden cases.
+5. `cmd/cli/sync_test.go` — end-to-end with testcontainers Postgres + `httptest` Akahu.
 
 ## Acceptance criteria
 
-- `finance sync` works against the user's real Akahu account (manual smoke test).
-- All automated tests pass without internet access.
-- No secrets logged. Run with `--verbose` and inspect output.
+- All deliverables ticked.
+- Real ANZ smoke-test passes; real Westpac smoke-test passes (after user connects Westpac).
+- No token in any log file or error message under `--verbose`.
 
 ## Files an agent will touch
 
 ```
-internal/ingest/{ports.go, sync.go, sync_test.go, mapper.go, mapper_test.go}
-internal/akahu/{client.go, client_test.go, types.go, fixtures/...}
-internal/storage/postgres/repository.go (extend with sync_state + upsert methods)
+internal/ports/{akahu_client.go, token_store.go}
+internal/akahu/{client.go, env_token_store.go, retry.go, types.go, fixtures/, *_test.go}
+internal/ingest/{sync.go, mapper.go, *_test.go}
+internal/observability/redaction.go (slog handler wrapper)
+internal/storage/postgres/{txn.go, account.go, sync_state.go} (extend with upsert + sync_state methods)
 internal/storage/postgres/queries.sql (extend)
-cmd/cli/{sync.go, sync_test.go}
+cmd/cli/{sync.go, health.go (extend), *_test.go}
 ```
 
 ## Pitfalls
 
-- Akahu returns amounts as decimal strings or numbers depending on field — always parse via `decimal.NewFromString` after coercing to string.
-- Direction (`DEBIT`/`CREDIT`) is inferred from sign of amount in some Akahu fields. Confirm against current Akahu API docs at implementation time; do not assume.
-- Don't bake the Akahu base URL into adapter code as a constant — make it injectable so `httptest` can override.
-- Don't log tokens or full raw JSON at INFO. Raw JSON goes to DB only.
+- Akahu amount fields can come as decimal strings or numbers; coerce to string then `decimal.NewFromString`.
+- Direction (`DEBIT`/`CREDIT`) inference rules per Akahu docs at implementation time; do not assume.
+- Don't bake the Akahu base URL as a constant — inject so `httptest` overrides.
+- Don't log tokens. Don't log amounts. Don't log merchants. The redaction filter is the safety net, not the policy.
+- Don't insert `raw_json` into any error chain; if a parse fails, include the txn id only.
+- Treat the 24h overlap window as a fixed constant for now; making it configurable is YAGNI.
