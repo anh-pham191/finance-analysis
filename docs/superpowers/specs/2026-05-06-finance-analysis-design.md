@@ -3,7 +3,7 @@
 - **Date:** 2026-05-06
 - **Author:** Anh Pham (with AI assistance)
 - **Status:** Approved for planning
-- **Philosophy reference:** `/Users/anhpham/Documents/Projects/script/development_rule/`
+- **Philosophy reference:** [anh-pham191/development-rule](https://github.com/anh-pham191/development-rule)
 
 ## 1. Purpose
 
@@ -239,7 +239,7 @@ Transactions contain PII (merchant, location, amounts, behavioural patterns). Th
 
 ## 11. Testing — TDD throughout
 
-Red → Green → Refactor for every package. No production code without a failing test first. **Tests are specifications** and are never modified to make a failing run pass without explicit reasoning (per `development_rule/agents/skills/agent-safety`).
+Red → Green → Refactor for every package. No production code without a failing test first. **Tests are specifications** and are never modified to make a failing run pass without explicit reasoning (per [development-rule](https://github.com/anh-pham191/development-rule)'s agent-safety skill).
 
 | Layer | Style | Notes |
 |---|---|---|
@@ -282,7 +282,7 @@ Each milestone ends green: tests pass, lint passes, CLI command works against re
 
 Per-milestone docs live under `docs/milestones/M{n}-*.md` and contain the full context any agent needs to work on that milestone in isolation.
 
-## 14. Constraints from `development_rule`
+## 14. Constraints from [development-rule](https://github.com/anh-pham191/development-rule)
 
 - **NZ English** in user-facing copy and docs (e.g. "categorise", "behaviour").
 - **Never commit without explicit human approval.**

@@ -16,7 +16,7 @@ Entry points for anyone (human or agent) working on this project.
 ## Philosophy
 
 This project follows the rules in
-`/Users/anhpham/Documents/Projects/script/development_rule/`. Highlights:
+[anh-pham191/development-rule](https://github.com/anh-pham191/development-rule). Highlights:
 
 - NZ English in user-facing copy and docs.
 - Never commit without explicit human approval.
@@ -27,13 +27,4 @@ This project follows the rules in
 
 ## Milestones
 
-| # | Title | Status |
-|---|---|---|
-| M1 | Skeleton & DB | Pending |
-| M2 | Akahu ingest | Pending |
-| M3 | Categorisation | Pending |
-| M4 | Reporting MVP | Pending |
-| M5 | Polish | Pending |
-| M6 | Westpac | Future |
-| M7 | HTTP API | Future |
-| M8 | Multi-user (auth, encrypted tokens, signup, deletion) | Future |
+See [`STATUS.md`](STATUS.md) for the live status tracker. Briefs themselves are at [`milestones/`](milestones/).
