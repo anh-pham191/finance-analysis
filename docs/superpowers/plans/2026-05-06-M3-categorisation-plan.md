@@ -89,6 +89,8 @@ Expected: FAIL because `internal/categorise` does not exist.
 ```yaml
 - name: Income/Salary
   kind: income
+- name: Food
+  kind: expense
 - name: Food/Groceries
   kind: expense
   parent: Food
@@ -133,7 +135,8 @@ type CategoryKind string
 const (KindIncome CategoryKind = "income"; KindExpense = "expense"; KindTransfer = "transfer")
 type Category struct { Name string; Kind CategoryKind; Parent string }
 type Predicate struct { Direction string; AmountMin *domain.Money; AmountMax *domain.Money; DescriptionMatches string; MerchantIn []string; MerchantMatches string; AccountIn []string; AkahuCategory string }
-type Rule struct { Name string; Priority int; Predicate Predicate; Category string; Enabled bool }
+type Rule struct { Name string; Priority int; Predicate Predicate; Category string; Enabled *bool }
+func (r Rule) IsEnabled() bool { return true when Enabled is nil, otherwise *Enabled }
 type Assignment struct { Category string; Source domain.AssignmentSource; RuleName string }
 ```
 
@@ -237,7 +240,7 @@ Cover:
 - disabled rules skipped,
 - lower priority number wins,
 - equal priority tiebreaks by `name` ascending,
-- no match returns `Uncategorised` assignment with nil/empty rule name.
+- no explicit match returns `false` with no category/rule assignment.
 
 - [ ] **Step 2: Verify red**
 
@@ -253,7 +256,7 @@ Add:
 func Apply(txn domain.Transaction, rules []Rule) (Assignment, bool)
 ```
 
-Return `false` only when no explicit rule matched; caller maps that to `Uncategorised`.
+Return `false` with no category/rule assignment only when no explicit rule matched; the use case maps that to `Uncategorised`.
 
 - [ ] **Step 4: Verify and commit**
 
