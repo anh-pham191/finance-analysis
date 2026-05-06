@@ -4,7 +4,7 @@ Personal finance tool for NZ bank accounts. Connects to ANZ (Westpac later) via 
 
 CLI today, multi-user web service later. Hexagonal architecture, TDD throughout, written in Go.
 
-> **Status:** M2 Akahu ingest is in progress. See [`docs/STATUS.md`](docs/STATUS.md) for what's next.
+> **Status:** M3 categorisation implementation is in final verification. See [`docs/STATUS.md`](docs/STATUS.md) for what's next.
 
 ## What it does
 
@@ -42,6 +42,18 @@ Acceptance checks:
 - Westpac is connected in the Akahu dashboard, then `go run ./cmd/cli sync` brings in Westpac transactions without code changes.
 
 Never commit `.env` or real Akahu tokens.
+
+## M3 Categorisation Smoke Test
+
+After syncing transactions into the local Docker database, run categorisation with environment variables loaded from `.env`:
+
+```bash
+set -a; . ./.env; set +a
+go run ./cmd/cli categorise
+go run ./cmd/cli uncategorised
+```
+
+Write one rule in `config/rules.yaml`, rerun `go run ./cmd/cli categorise`, then run `go run ./cmd/cli uncategorised` again. The uncategorised count should shrink when the new rule matches existing transactions.
 
 ## Documentation
 

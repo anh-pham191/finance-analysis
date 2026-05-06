@@ -114,7 +114,9 @@ func (r *AssignmentRepo) ListByCategory(ctx context.Context, userID domain.UserI
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() {
+			_ = rows.Close()
+		}()
 
 		for rows.Next() {
 			var assignment domain.CategoryAssignment

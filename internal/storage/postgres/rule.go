@@ -113,7 +113,9 @@ func (r *RuleRepo) List(ctx context.Context, userID domain.UserID) ([]domain.Rul
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() {
+			_ = rows.Close()
+		}()
 
 		for rows.Next() {
 			var rule domain.Rule

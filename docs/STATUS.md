@@ -2,19 +2,19 @@
 
 > Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed, decision made).
 
-**Last updated:** 2026-05-06 (M3 plan in progress)
+**Last updated:** 2026-05-06 (M3 final verification)
 
 ## Current state
 
-- **Phase:** M3 implementation plan in progress on `feature/m3-plan`.
-- **Code in repo:** M1 and M2 are merged to `develop`; M3 categorisation is ready for plan review.
+- **Phase:** M3 categorisation implementation is in final verification on `feature/m3-categorisation`.
+- **Code in repo:** M1 and M2 are merged to `develop`; M3 categorisation is implemented on the feature branch. Unit and integration tests pass locally; lint still needs to run in an environment with `golangci-lint` installed.
 - **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — revised after review (RLS hardening, per-aggregate repos, M6 demoted, M8 split into M8a/M8b, akahu_tokens deferred to M8a, etc.). Approved by user.
 - **Architecture docs:** `docs/architecture/overview.md` and `docs/architecture/security.md` — current.
 - **Per-milestone briefs:** M1, M2, M3, M4, M5, M7, M8a, M8b under `docs/milestones/`. (No M6: Westpac is now a smoke-test acceptance under M2.)
 
 ## Next action
 
-Review the M3 implementation plan at `docs/superpowers/plans/2026-05-06-M3-categorisation-plan.md`, then open a plan PR into `develop` before implementation starts.
+Run `make lint` in an environment with `golangci-lint` installed, then review the M3 implementation branch and open/merge the PR into `develop`. After M3 merges, start the M4 reporting MVP plan.
 
 ## Branching
 
@@ -32,7 +32,7 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 |---|---|---|---|---|
 | M1 | Skeleton & DB (RLS hardened) | ✅ written | ✅ written | ✅ complete |
 | M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ✅ written | ✅ complete |
-| M3 | Categorisation | ✅ written | 🚧 in progress | ⏳ |
+| M3 | Categorisation | ✅ written | ✅ complete | 🚧 final verification |
 | M4 | Reporting MVP | ✅ written | ⏳ | ⏳ |
 | M5 | Polish | ✅ written | ⏳ | ⏳ |
 | M7 | HTTP API (Authenticator port) | ✅ written | ⏳ | ⏳ |

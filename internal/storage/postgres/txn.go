@@ -108,7 +108,9 @@ func (r *TxnRepo) List(ctx context.Context, userID domain.UserID) ([]domain.Tran
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() {
+			_ = rows.Close()
+		}()
 
 		for rows.Next() {
 			var txn domain.Transaction
