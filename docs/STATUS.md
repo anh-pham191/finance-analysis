@@ -2,19 +2,19 @@
 
 > Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed, decision made).
 
-**Last updated:** 2026-05-06 (M2 implementation in progress)
+**Last updated:** 2026-05-06 (M3 plan in progress)
 
 ## Current state
 
-- **Phase:** M2 implementation in progress on `feature/m2-akahu-ingest`.
-- **Code in repo:** M1 is merged; M2 Akahu ports, HTTP client, retry/redaction, token store, ingest mapping/sync, CLI sync, health Akahu check, and cross-tenant sync tests are in progress on the feature branch.
+- **Phase:** M3 implementation plan in progress on `feature/m3-plan`.
+- **Code in repo:** M1 and M2 are merged to `develop`; M3 categorisation is ready for plan review.
 - **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — revised after review (RLS hardening, per-aggregate repos, M6 demoted, M8 split into M8a/M8b, akahu_tokens deferred to M8a, etc.). Approved by user.
 - **Architecture docs:** `docs/architecture/overview.md` and `docs/architecture/security.md` — current.
 - **Per-milestone briefs:** M1, M2, M3, M4, M5, M7, M8a, M8b under `docs/milestones/`. (No M6: Westpac is now a smoke-test acceptance under M2.)
 
 ## Next action
 
-Finish M2 verification, including local integration tests and real Akahu smoke tests for ANZ and Westpac, then open a PR into `develop`.
+Review the M3 implementation plan at `docs/superpowers/plans/2026-05-06-M3-categorisation-plan.md`, then open a plan PR into `develop` before implementation starts.
 
 ## Branching
 
@@ -31,8 +31,8 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 | # | Title | Brief | Plan | Implementation |
 |---|---|---|---|---|
 | M1 | Skeleton & DB (RLS hardened) | ✅ written | ✅ written | ✅ complete |
-| M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ✅ written | 🚧 in progress |
-| M3 | Categorisation | ✅ written | ⏳ | ⏳ |
+| M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ✅ written | ✅ complete |
+| M3 | Categorisation | ✅ written | 🚧 in progress | ⏳ |
 | M4 | Reporting MVP | ✅ written | ⏳ | ⏳ |
 | M5 | Polish | ✅ written | ⏳ | ⏳ |
 | M7 | HTTP API (Authenticator port) | ✅ written | ⏳ | ⏳ |
