@@ -11,6 +11,8 @@ import (
 type EnvTokenStore struct{}
 
 func (EnvTokenStore) AkahuTokens(ctx context.Context, userID domain.UserID) (string, string, error) {
+	// M2 intentionally returns the same local tokens for every user. M8a
+	// replaces this with encrypted per-user token storage.
 	app := os.Getenv("AKAHU_APP_TOKEN")
 	user := os.Getenv("AKAHU_USER_TOKEN")
 	if app == "" || user == "" {

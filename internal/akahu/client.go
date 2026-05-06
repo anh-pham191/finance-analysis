@@ -3,9 +3,11 @@ package akahu
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strings"
@@ -47,8 +49,8 @@ func NewClient(config Config) *Client {
 		httpClient: httpClient,
 		retry: retryPolicy{
 			maxRetries: 3,
-			baseDelay:  100 * time.Millisecond,
-			jitter:     func(time.Duration) time.Duration { return 0 },
+			baseDelay:  time.Second,
+			jitter:     quarterJitter,
 			sleep: func(ctx context.Context, delay time.Duration) error {
 				timer := time.NewTimer(delay)
 				defer timer.Stop()
@@ -93,7 +95,7 @@ func (c *Client) FetchTransactions(ctx context.Context, accountID string, since 
 	path := fmt.Sprintf("/accounts/%s/transactions", url.PathEscape(accountID))
 	endpoint := c.endpoint(path)
 	query := endpoint.Query()
-	query.Set("since", since.Format(time.RFC3339))
+	query.Set("start", since.UTC().Format(time.RFC3339))
 	endpoint.RawQuery = query.Encode()
 
 	var txns []ports.RawTxn
@@ -201,14 +203,11 @@ func (c *Client) endpoint(path string) *url.URL {
 }
 
 func (c *Client) nextURL(currentURL *url.URL, next string) (*url.URL, error) {
-	parsed, err := url.Parse(next)
-	if err != nil {
-		return nil, err
-	}
-	if parsed.IsAbs() {
-		return parsed, nil
-	}
-	return currentURL.ResolveReference(parsed), nil
+	nextURL := *currentURL
+	query := nextURL.Query()
+	query.Set("cursor", next)
+	nextURL.RawQuery = query.Encode()
+	return &nextURL, nil
 }
 
 func mapTransaction(raw json.RawMessage) (ports.RawTxn, error) {
@@ -266,4 +265,19 @@ func amountString(raw json.RawMessage) (string, error) {
 		return "", fmt.Errorf("invalid JSON amount")
 	}
 	return asNumber.String(), nil
+}
+
+func quarterJitter(delay time.Duration) time.Duration {
+	if delay <= 0 {
+		return 0
+	}
+	max := delay / 2
+	if max <= 0 {
+		return 0
+	}
+	value, err := rand.Int(rand.Reader, big.NewInt(int64(max)+1))
+	if err != nil {
+		return 0
+	}
+	return time.Duration(value.Int64()) - delay/4
 }

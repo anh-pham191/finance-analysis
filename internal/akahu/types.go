@@ -32,7 +32,7 @@ type transactionListResponse struct {
 
 type transactionResponse struct {
 	ID          string          `json:"_id"`
-	AccountID   string          `json:"account"`
+	AccountID   string          `json:"_account"`
 	Date        string          `json:"date"`
 	Amount      json.RawMessage `json:"amount"`
 	Direction   string          `json:"type"`
