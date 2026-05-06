@@ -61,6 +61,13 @@ These are derived from [anh-pham191/development-rule](https://github.com/anh-pha
 22. **Red flags that mean "stop and ask":** the task seems to require editing an existing test to pass; the task seems to require relaxing a security invariant; the task seems to need a new top-level package outside the layout in `docs/architecture/overview.md`; the task seems to span multiple milestones at once; the task seems to require disabling `archtest`.
 23. **NZ English** in docs and user-facing copy ("categorise", "behaviour", "colour").
 
+### Implementation cadence
+
+- Execute milestone implementation plans **one task per chat/session** by default. Do not run a 10+ task milestone as one long continuous agent session unless the user explicitly asks for that.
+- Each task ends with: red/green verification evidence, affected package tests, review gates where applicable, staged diff/stat, then a task-sized commit after human approval. If the user has explicitly approved "commit after each task" for the active session, that approval applies only to that session.
+- Do not start the next plan task until the current task has been committed or the user explicitly chooses to leave it uncommitted.
+- Keep commits task-sized. If review feedback changes a task, include the fixes in that same task commit before moving on.
+
 ## Forbidden imports
 
 Enforced from M1 by `internal/archtest/archtest_test.go` (fails CI on regression):
