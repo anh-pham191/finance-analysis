@@ -47,7 +47,7 @@ func TestMapTxnMapsAmountAndDirection(t *testing.T) {
 		AccountID:     "acc-1",
 		PostedAt:      postedAt,
 		Amount:        "12.34",
-		Direction:     "DEBIT",
+		Direction:     "CREDIT",
 		Description:   "Coffee",
 		Merchant:      "Cafe",
 		AkahuCategory: "eating_out",
@@ -82,34 +82,28 @@ func TestMapTxnMapsAmountAndDirection(t *testing.T) {
 	if txn.Amount.String() != "12.34" {
 		t.Fatalf("Amount = %s, want 12.34", txn.Amount.String())
 	}
-	if txn.Direction != domain.DirectionDebit {
-		t.Fatalf("Direction = %q, want %q", txn.Direction, domain.DirectionDebit)
+	if txn.Direction != domain.DirectionCredit {
+		t.Fatalf("Direction = %q, want %q", txn.Direction, domain.DirectionCredit)
 	}
 }
 
-func TestMapTxnRejectsUnknownDirectionWithoutPII(t *testing.T) {
+func TestMapTxnInfersDebitFromNegativeAmountAndIgnoresAkahuType(t *testing.T) {
 	t.Parallel()
 
-	const (
-		txnID       = "txn-secret-direction"
-		description = "private desc"
-		merchant    = "private merchant"
-		amount      = "12.34"
-		rawJSON     = `{"secret":"raw"}`
-	)
-
-	_, err := mapTxn(ports.RawTxn{
-		ID:          txnID,
-		AccountID:   "acc-1",
-		PostedAt:    time.Date(2026, 5, 6, 12, 30, 0, 0, time.UTC),
-		Amount:      amount,
-		Direction:   "TRANSFER",
-		Description: description,
-		Merchant:    merchant,
-		RawJSON:     []byte(rawJSON),
+	txn, err := mapTxn(ports.RawTxn{
+		ID:        "txn-transfer",
+		AccountID: "acc-1",
+		PostedAt:  time.Date(2026, 5, 6, 12, 30, 0, 0, time.UTC),
+		Amount:    "-12.34",
+		Direction: "TRANSFER",
 	})
+	if err != nil {
+		t.Fatalf("mapTxn returned error: %v", err)
+	}
 
-	assertMapperErrorRedactsPII(t, err, txnID, description, merchant, amount, rawJSON)
+	if txn.Direction != domain.DirectionDebit {
+		t.Fatalf("Direction = %q, want %q", txn.Direction, domain.DirectionDebit)
+	}
 }
 
 func TestMapTxnRejectsInvalidAmountWithoutPII(t *testing.T) {

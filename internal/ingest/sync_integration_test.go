@@ -45,10 +45,10 @@ func TestSyncCrossTenantIsolation(t *testing.T) {
 	depsA := syncDeps(accountRepo, txnRepo, syncStateRepo, "User A Account", []byte(`{"tenant":"A"}`), now)
 	depsB := syncDeps(accountRepo, txnRepo, syncStateRepo, "User B Account", []byte(`{"tenant":"B"}`), now)
 
-	if err := Sync(ctx, userOne, depsA, Options{}); err != nil {
+	if _, err := Sync(ctx, userOne, depsA, Options{}); err != nil {
 		t.Fatalf("sync user one: %v", err)
 	}
-	if err := Sync(ctx, userTwo, depsB, Options{}); err != nil {
+	if _, err := Sync(ctx, userTwo, depsB, Options{}); err != nil {
 		t.Fatalf("sync user two: %v", err)
 	}
 

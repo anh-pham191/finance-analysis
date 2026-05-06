@@ -23,48 +23,55 @@ type Options struct {
 	From *time.Time
 }
 
-func Sync(ctx context.Context, userID domain.UserID, deps Deps, opts Options) error {
+type Result struct {
+	Accounts     int
+	Transactions int
+}
+
+func Sync(ctx context.Context, userID domain.UserID, deps Deps, opts Options) (Result, error) {
 	if err := validateDeps(deps); err != nil {
-		return err
+		return Result{}, err
 	}
 
 	appToken, userToken, err := deps.Tokens.AkahuTokens(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("load Akahu tokens: %w", err)
+		return Result{}, fmt.Errorf("load Akahu tokens: %w", err)
 	}
 
 	client := deps.NewAkahuClient(appToken, userToken)
 	if client == nil {
-		return errors.New("new Akahu client returned nil")
+		return Result{}, errors.New("new Akahu client returned nil")
 	}
 	accounts, err := client.ListAccounts(ctx)
 	if err != nil {
-		return fmt.Errorf("list Akahu accounts: %w", err)
+		return Result{}, fmt.Errorf("list Akahu accounts: %w", err)
 	}
 
+	result := Result{Accounts: len(accounts)}
 	for _, rawAccount := range accounts {
 		account := mapAccount(rawAccount)
 		if err := deps.Accounts.Upsert(ctx, userID, account); err != nil {
-			return fmt.Errorf("upsert account %s: %w", account.ID, err)
+			return Result{}, fmt.Errorf("upsert account %s: %w", account.ID, err)
 		}
 
 		state, err := deps.SyncStates.Get(ctx, userID, account.ID)
 		if err != nil && !isSyncStateNotFound(err) {
-			return fmt.Errorf("load sync state for account %s: %w", account.ID, err)
+			return Result{}, fmt.Errorf("load sync state for account %s: %w", account.ID, err)
 		}
 
 		txns, err := client.FetchTransactions(ctx, account.ID, syncSince(deps.Clock.Now(), state, opts))
 		if err != nil {
-			return fmt.Errorf("fetch transactions for account %s: %w", account.ID, err)
+			return Result{}, fmt.Errorf("fetch transactions for account %s: %w", account.ID, err)
 		}
+		result.Transactions += len(txns)
 
 		for _, rawTxn := range txns {
 			txn, err := mapTxn(rawTxn)
 			if err != nil {
-				return err
+				return Result{}, err
 			}
 			if err := deps.Txns.Upsert(ctx, userID, txn); err != nil {
-				return fmt.Errorf("upsert transaction %s: %w", txn.ID, err)
+				return Result{}, fmt.Errorf("upsert transaction %s: %w", txn.ID, err)
 			}
 		}
 
@@ -73,11 +80,11 @@ func Sync(ctx context.Context, userID domain.UserID, deps Deps, opts Options) er
 			AccountID:    account.ID,
 			LastSyncedAt: &lastSyncedAt,
 		}); err != nil {
-			return fmt.Errorf("upsert sync state for account %s: %w", account.ID, err)
+			return Result{}, fmt.Errorf("upsert sync state for account %s: %w", account.ID, err)
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 func validateDeps(deps Deps) error {
