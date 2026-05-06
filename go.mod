@@ -7,6 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/shopspring/decimal v1.4.0
 	github.com/spf13/cobra v1.10.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
