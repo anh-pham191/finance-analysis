@@ -48,8 +48,12 @@ func TestSyncFirstRunFetchesAccountsAndTransactions(t *testing.T) {
 		Clock: fakeClock{now: now},
 	}
 
-	if err := Sync(ctx, userID, deps, Options{}); err != nil {
+	result, err := Sync(ctx, userID, deps, Options{})
+	if err != nil {
 		t.Fatalf("Sync returned error: %v", err)
+	}
+	if result.Accounts != 1 || result.Transactions != 1 {
+		t.Fatalf("Sync result = %+v, want 1 account and 1 transaction", result)
 	}
 
 	if tokens.calledWith != userID {
@@ -128,7 +132,7 @@ func TestSyncSecondRunUsesOverlapBeforeLastSyncedAt(t *testing.T) {
 
 	deps := validSyncDeps(now, client, states, &fakeTxnRepo{})
 
-	if err := Sync(ctx, userID, deps, Options{}); err != nil {
+	if _, err := Sync(ctx, userID, deps, Options{}); err != nil {
 		t.Fatalf("Sync returned error: %v", err)
 	}
 
@@ -156,7 +160,7 @@ func TestSyncFromOverrideUsesExplicitDate(t *testing.T) {
 
 	deps := validSyncDeps(now, client, states, &fakeTxnRepo{})
 
-	if err := Sync(ctx, userID, deps, Options{From: &from}); err != nil {
+	if _, err := Sync(ctx, userID, deps, Options{From: &from}); err != nil {
 		t.Fatalf("Sync returned error: %v", err)
 	}
 
@@ -171,7 +175,7 @@ func TestSyncMappingErrorDoesNotUpsertBadTxn(t *testing.T) {
 	now := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
 	accountID := "acc-1"
 	badTxn := validRawTxn("txn-bad", accountID)
-	badTxn.Direction = "TRANSFER"
+	badTxn.Amount = "not-money"
 	client := &fakeAkahuClient{
 		accounts: []ports.RawAccount{{ID: accountID, Name: "Everyday"}},
 		txns:     map[string][]ports.RawTxn{accountID: {badTxn}},
@@ -179,7 +183,7 @@ func TestSyncMappingErrorDoesNotUpsertBadTxn(t *testing.T) {
 	txns := &fakeTxnRepo{}
 	deps := validSyncDeps(now, client, newFakeSyncStateRepo(), txns)
 
-	err := Sync(ctx, userID, deps, Options{})
+	_, err := Sync(ctx, userID, deps, Options{})
 	if err == nil {
 		t.Fatal("Sync returned nil error, want mapping error")
 	}
@@ -199,7 +203,7 @@ func TestSyncRejectsNilDependencyWithoutSensitiveValues(t *testing.T) {
 	deps := validSyncDeps(now, client, newFakeSyncStateRepo(), &fakeTxnRepo{})
 	deps.Accounts = nil
 
-	err := Sync(context.Background(), domain.UserID(42), deps, Options{})
+	_, err := Sync(context.Background(), domain.UserID(42), deps, Options{})
 	assertSyncErrorWithoutSensitiveValues(t, err, "missing account repo")
 }
 
@@ -214,7 +218,7 @@ func TestSyncRejectsNilClientWithoutSensitiveValues(t *testing.T) {
 	deps := validSyncDeps(now, nil, newFakeSyncStateRepo(), &fakeTxnRepo{})
 	deps.Tokens = &fakeTokenStore{app: appToken, user: userToken}
 
-	err := Sync(context.Background(), domain.UserID(42), deps, Options{})
+	_, err := Sync(context.Background(), domain.UserID(42), deps, Options{})
 	assertSyncErrorWithoutSensitiveValues(t, err, "new Akahu client returned nil")
 }
 

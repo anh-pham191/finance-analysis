@@ -28,6 +28,8 @@ type syncOptions struct {
 	From *time.Time
 }
 
+type ingestResult = ingest.Result
+
 var syncRunner = runSync
 
 type systemClock struct{}
@@ -50,7 +52,12 @@ func newSyncCommand(stdout, stderr io.Writer) *cobra.Command {
 				}
 				parsed = &fromDate
 			}
-			return syncRunner(cmd.Context(), syncOptions{From: parsed})
+			result, err := syncRunner(cmd.Context(), syncOptions{From: parsed})
+			if err != nil {
+				return err
+			}
+			printSyncResult(stdout, result)
+			return nil
 		},
 	}
 	cmd.SetOut(stdout)
@@ -59,14 +66,14 @@ func newSyncCommand(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-func runSync(ctx context.Context, opts syncOptions) error {
+func runSync(ctx context.Context, opts syncOptions) (ingest.Result, error) {
 	dsn := firstEnv("DATABASE_URL_APP", "DATABASE_URL")
 	if dsn == "" {
-		return errors.New("DATABASE_URL_APP or DATABASE_URL is required")
+		return ingest.Result{}, errors.New("DATABASE_URL_APP or DATABASE_URL is required")
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return fmt.Errorf("open database: %w", err)
+		return ingest.Result{}, fmt.Errorf("open database: %w", err)
 	}
 	defer func() {
 		_ = db.Close()
@@ -74,7 +81,7 @@ func runSync(ctx context.Context, opts syncOptions) error {
 
 	baseURL, err := syncAkahuBaseURL(os.Getenv("AKAHU_BASE_URL"))
 	if err != nil {
-		return err
+		return ingest.Result{}, err
 	}
 
 	deps := ingest.Deps{
@@ -92,6 +99,14 @@ func runSync(ctx context.Context, opts syncOptions) error {
 		Clock: systemClock{},
 	}
 	return ingest.Sync(ctx, domain.UserID(1), deps, ingest.Options{From: opts.From})
+}
+
+func printSyncResult(stdout io.Writer, result ingest.Result) {
+	if result.Accounts == 0 {
+		_, _ = fmt.Fprintln(stdout, "Sync complete: 0 accounts found. Check Akahu dashboard connections and token permissions.")
+		return
+	}
+	_, _ = fmt.Fprintf(stdout, "Sync complete: %d accounts, %d transactions fetched.\n", result.Accounts, result.Transactions)
 }
 
 func syncAkahuBaseURL(raw string) (string, error) {

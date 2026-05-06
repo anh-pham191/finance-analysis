@@ -12,10 +12,10 @@ func TestSyncCommandParsesFromDate(t *testing.T) {
 	var out bytes.Buffer
 	var gotOptions syncOptions
 	called := false
-	syncRunner = func(ctx context.Context, opts syncOptions) error {
+	syncRunner = func(ctx context.Context, opts syncOptions) (ingestResult, error) {
 		called = true
 		gotOptions = opts
-		return nil
+		return ingestResult{Accounts: 2, Transactions: 3}, nil
 	}
 	t.Cleanup(func() {
 		syncRunner = runSync
@@ -37,13 +37,16 @@ func TestSyncCommandParsesFromDate(t *testing.T) {
 	if !gotOptions.From.Equal(want) {
 		t.Fatalf("sync runner From = %v, want %v", gotOptions.From, want)
 	}
+	if got := out.String(); !strings.Contains(got, "2 accounts") || !strings.Contains(got, "3 transactions") {
+		t.Fatalf("sync output = %q, want account and transaction counts", got)
+	}
 }
 
 func TestSyncCommandRejectsInvalidFromDate(t *testing.T) {
 	var out bytes.Buffer
-	syncRunner = func(ctx context.Context, opts syncOptions) error {
+	syncRunner = func(ctx context.Context, opts syncOptions) (ingestResult, error) {
 		t.Fatal("sync runner should not be called")
-		return nil
+		return ingestResult{}, nil
 	}
 	t.Cleanup(func() {
 		syncRunner = runSync
@@ -64,12 +67,12 @@ func TestSyncCommandRejectsInvalidFromDate(t *testing.T) {
 func TestSyncCommandPassesNilFromWhenOmitted(t *testing.T) {
 	var out bytes.Buffer
 	called := false
-	syncRunner = func(ctx context.Context, opts syncOptions) error {
+	syncRunner = func(ctx context.Context, opts syncOptions) (ingestResult, error) {
 		called = true
 		if opts.From != nil {
 			t.Fatalf("sync runner From = %v, want nil", opts.From)
 		}
-		return nil
+		return ingestResult{}, nil
 	}
 	t.Cleanup(func() {
 		syncRunner = runSync
@@ -83,6 +86,9 @@ func TestSyncCommandPassesNilFromWhenOmitted(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("sync runner was not called")
+	}
+	if got := out.String(); !strings.Contains(got, "0 accounts found") {
+		t.Fatalf("sync output = %q, want zero accounts message", got)
 	}
 }
 
