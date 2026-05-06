@@ -6,6 +6,7 @@
 # User-specific config (templates are committed as *.example.yaml)
 config/config.yaml
 config/rules.yaml
+config/categories.yaml
 
 # Real data fixtures (synthetic ones live in *.synthetic.json and ARE committed)
 **/fixtures/**/real.*
