@@ -47,6 +47,15 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 
 Legend: ✅ done · ⏳ pending · 🚧 in progress · ❌ blocked.
 
+## Branching
+
+This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branching.md) for the full convention.
+
+- `main` — stable; updated only via `develop → main` release PRs.
+- `develop` — integration; all work PRs merge here.
+- `feature/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` — branched off `develop`, PR'd into `develop`.
+
+**Never commit directly to `main` or `develop`.**
 (M6 — Westpac — folded into M2 acceptance as a smoke-test verification.)
 
 ## Decisions log
