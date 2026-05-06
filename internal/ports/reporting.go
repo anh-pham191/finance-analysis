@@ -19,6 +19,11 @@ type TxnFilter struct {
 	Offset     int
 }
 
+type TxnReportRow struct {
+	Transaction domain.Transaction
+	Category    string
+}
+
 type TxnQueryRepo interface {
-	ListFiltered(ctx context.Context, userID domain.UserID, filter TxnFilter) ([]domain.Transaction, error)
+	ListFiltered(ctx context.Context, userID domain.UserID, filter TxnFilter) ([]TxnReportRow, error)
 }

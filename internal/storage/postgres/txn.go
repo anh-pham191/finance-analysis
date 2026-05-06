@@ -155,7 +155,7 @@ func (r *TxnRepo) List(ctx context.Context, userID domain.UserID) ([]domain.Tran
 	return txns, nil
 }
 
-func (r *TxnRepo) ListFiltered(ctx context.Context, userID domain.UserID, filter ports.TxnFilter) ([]domain.Transaction, error) {
+func (r *TxnRepo) ListFiltered(ctx context.Context, userID domain.UserID, filter ports.TxnFilter) ([]ports.TxnReportRow, error) {
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
@@ -165,14 +165,17 @@ func (r *TxnRepo) ListFiltered(ctx context.Context, userID domain.UserID, filter
 		offset = 0
 	}
 
-	var txns []domain.Transaction
+	var reportRows []ports.TxnReportRow
 	err := withUserTx(ctx, r.db, userID, func(ctx context.Context, tx *sql.Tx) error {
 		orderBy, err := txnFilterOrderBy(filter.Sort)
 		if err != nil {
 			return err
 		}
 
-		joins := ""
+		joins := `
+			LEFT JOIN category_assignments ca ON ca.user_id = t.user_id AND ca.txn_id = t.id
+			LEFT JOIN categories c ON c.user_id = t.user_id AND c.id = ca.category_id
+		`
 		where := []string{"t.user_id = $1"}
 		args := []any{userID.Int64()}
 		nextArg := 2
@@ -188,7 +191,6 @@ func (r *TxnRepo) ListFiltered(ctx context.Context, userID domain.UserID, filter
 			nextArg++
 		}
 		if filter.CategoryID != nil {
-			joins = "JOIN category_assignments ca ON ca.user_id = t.user_id AND ca.txn_id = t.id"
 			where = append(where, fmt.Sprintf("ca.category_id = $%d", nextArg))
 			args = append(args, *filter.CategoryID)
 			nextArg++
@@ -227,7 +229,8 @@ func (r *TxnRepo) ListFiltered(ctx context.Context, userID domain.UserID, filter
 
 		query := fmt.Sprintf(`
 			SELECT t.id, t.account_id, t.posted_at, t.amount::text, t.direction,
-				t.description, t.merchant, t.akahu_category, t.raw_json, t.created_at, t.updated_at
+				t.description, t.merchant, t.akahu_category, t.raw_json, t.created_at, t.updated_at,
+				COALESCE(c.name, '')
 			FROM transactions t
 			%s
 			WHERE %s
@@ -244,18 +247,18 @@ func (r *TxnRepo) ListFiltered(ctx context.Context, userID domain.UserID, filter
 		}()
 
 		for rows.Next() {
-			txn, err := scanTransaction(rows)
+			row, err := scanTxnReportRow(rows)
 			if err != nil {
 				return err
 			}
-			txns = append(txns, txn)
+			reportRows = append(reportRows, row)
 		}
 		return rows.Err()
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list filtered transactions: %w", err)
 	}
-	return txns, nil
+	return reportRows, nil
 }
 
 type transactionScanner interface {
@@ -294,6 +297,41 @@ func scanTransaction(scanner transactionScanner) (domain.Transaction, error) {
 	txn.Direction = parsedDirection
 	txn.RawJSON = json.RawMessage(raw)
 	return txn, nil
+}
+
+func scanTxnReportRow(scanner transactionScanner) (ports.TxnReportRow, error) {
+	var row ports.TxnReportRow
+	var amount string
+	var direction string
+	var raw []byte
+	if err := scanner.Scan(
+		&row.Transaction.ID,
+		&row.Transaction.AccountID,
+		&row.Transaction.PostedAt,
+		&amount,
+		&direction,
+		&row.Transaction.Description,
+		&row.Transaction.Merchant,
+		&row.Transaction.AkahuCategory,
+		&raw,
+		&row.Transaction.CreatedAt,
+		&row.Transaction.UpdatedAt,
+		&row.Category,
+	); err != nil {
+		return ports.TxnReportRow{}, err
+	}
+	money, err := domain.NewMoneyFromString(amount)
+	if err != nil {
+		return ports.TxnReportRow{}, fmt.Errorf("parse transaction amount: %w", err)
+	}
+	parsedDirection, err := domain.ParseDirection(direction)
+	if err != nil {
+		return ports.TxnReportRow{}, err
+	}
+	row.Transaction.Amount = money
+	row.Transaction.Direction = parsedDirection
+	row.Transaction.RawJSON = json.RawMessage(raw)
+	return row, nil
 }
 
 func txnFilterOrderBy(sort string) (string, error) {

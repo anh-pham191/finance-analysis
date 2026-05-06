@@ -26,7 +26,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-01", "rpt-a-02", "rpt-a-06", "rpt-a-05", "rpt-a-03"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-01", "rpt-a-02", "rpt-a-06", "rpt-a-05", "rpt-a-03"})
 	})
 
 	t.Run("category filter uses assignments", func(t *testing.T) {
@@ -34,7 +34,8 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-01", "rpt-a-02"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-01", "rpt-a-02"})
+		assertTxnCategories(t, txns, []string{"Reporting/Groceries", "Reporting/Groceries"})
 	})
 
 	t.Run("merchant filter is exact", func(t *testing.T) {
@@ -42,7 +43,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-01", "rpt-a-06"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-01", "rpt-a-06"})
 	})
 
 	t.Run("account filter is exact", func(t *testing.T) {
@@ -50,7 +51,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-03"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-03"})
 	})
 
 	t.Run("direction filter is exact", func(t *testing.T) {
@@ -59,7 +60,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-04"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-04"})
 	})
 
 	t.Run("min and max amount are inclusive", func(t *testing.T) {
@@ -69,7 +70,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-01", "rpt-a-02", "rpt-a-05"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-01", "rpt-a-02", "rpt-a-05"})
 	})
 
 	t.Run("sorts by date with id tiebreaker by default", func(t *testing.T) {
@@ -77,7 +78,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-01", "rpt-a-02", "rpt-a-06", "rpt-a-05", "rpt-a-03", "rpt-a-04"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-01", "rpt-a-02", "rpt-a-06", "rpt-a-05", "rpt-a-03", "rpt-a-04"})
 	})
 
 	t.Run("sorts by amount descending with id tiebreaker", func(t *testing.T) {
@@ -86,7 +87,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-02", "rpt-a-05", "rpt-a-01", "rpt-a-06", "rpt-a-03"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-02", "rpt-a-05", "rpt-a-01", "rpt-a-06", "rpt-a-03"})
 	})
 
 	t.Run("sorts by merchant with id tiebreaker", func(t *testing.T) {
@@ -94,7 +95,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-01", "rpt-a-06", "rpt-a-05", "rpt-a-03", "rpt-a-02", "rpt-a-04"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-01", "rpt-a-06", "rpt-a-05", "rpt-a-03", "rpt-a-02", "rpt-a-04"})
 	})
 
 	t.Run("rejects invalid sort", func(t *testing.T) {
@@ -109,7 +110,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-06", "rpt-a-05"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-06", "rpt-a-05"})
 	})
 
 	t.Run("offset past end returns empty", func(t *testing.T) {
@@ -117,7 +118,7 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, nil)
+		assertTxnReportRowIDs(t, txns, nil)
 	})
 
 	t.Run("tenant isolation excludes matching other tenant rows", func(t *testing.T) {
@@ -129,13 +130,13 @@ func TestReportingTxnQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, txns, []string{"rpt-a-01"})
+		assertTxnReportRowIDs(t, txns, []string{"rpt-a-01"})
 
 		otherTxns, err := repo.ListFiltered(context.Background(), fixture.userB, ports.TxnFilter{Merchant: "Alpha Market"})
 		if err != nil {
 			t.Fatalf("list other tenant filtered transactions: %v", err)
 		}
-		assertTxnIDs(t, otherTxns, []string{"rpt-b-01"})
+		assertTxnReportRowIDs(t, otherTxns, []string{"rpt-b-01"})
 	})
 
 }
@@ -266,5 +267,29 @@ func mustUpsertReportingTxn(t *testing.T, repo *TxnRepo, userID domain.UserID, t
 
 	if txn.category != nil {
 		mustUpsertAssignment(t, NewAssignmentRepo(repo.db), userID, txn.id, *txn.category, domain.AssignmentSourceManual, nil)
+	}
+}
+
+func assertTxnReportRowIDs(t *testing.T, rows []ports.TxnReportRow, want []string) {
+	t.Helper()
+	if len(rows) != len(want) {
+		t.Fatalf("transactions = %+v, want IDs %v", rows, want)
+	}
+	for i, wantID := range want {
+		if rows[i].Transaction.ID != wantID {
+			t.Fatalf("transactions[%d].ID = %q, want %q", i, rows[i].Transaction.ID, wantID)
+		}
+	}
+}
+
+func assertTxnCategories(t *testing.T, rows []ports.TxnReportRow, want []string) {
+	t.Helper()
+	if len(rows) != len(want) {
+		t.Fatalf("transactions = %+v, want categories %v", rows, want)
+	}
+	for i, wantCategory := range want {
+		if rows[i].Category != wantCategory {
+			t.Fatalf("transactions[%d].Category = %q, want %q", i, rows[i].Category, wantCategory)
+		}
 	}
 }

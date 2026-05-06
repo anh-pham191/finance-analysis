@@ -1,6 +1,10 @@
 package report
 
-import "github.com/anh-pham191/finance-analysis/internal/domain"
+import (
+	"time"
+
+	"github.com/anh-pham191/finance-analysis/internal/domain"
+)
 
 type MoneyAmount string
 
@@ -34,4 +38,15 @@ type CompareCategory struct {
 	B            MoneyAmount `json:"b"`
 	Delta        MoneyAmount `json:"delta"`
 	DeltaPercent *float64    `json:"delta_percent"`
+}
+
+type TxnRow struct {
+	TxnID       string      `json:"txn_id"`
+	PostedAt    time.Time   `json:"posted_at"`
+	AccountID   string      `json:"account_id"`
+	Category    string      `json:"category"`
+	Direction   string      `json:"direction"`
+	Amount      MoneyAmount `json:"amount"`
+	Merchant    string      `json:"merchant"`
+	Description string      `json:"description"`
 }
