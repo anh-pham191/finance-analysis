@@ -19,3 +19,19 @@ type CategoryTotal struct {
 	Kind       string      `json:"kind"`
 	Total      MoneyAmount `json:"total"`
 }
+
+type CompareResult struct {
+	A          domain.Range      `json:"a"`
+	B          domain.Range      `json:"b"`
+	Categories []CompareCategory `json:"categories"`
+}
+
+type CompareCategory struct {
+	CategoryID   int64       `json:"category_id"`
+	Category     string      `json:"category"`
+	Kind         string      `json:"kind"`
+	A            MoneyAmount `json:"a"`
+	B            MoneyAmount `json:"b"`
+	Delta        MoneyAmount `json:"delta"`
+	DeltaPercent *float64    `json:"delta_percent"`
+}
