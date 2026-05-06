@@ -25,6 +25,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 
 	cmd.AddCommand(newHealthCommand(stdout))
 	cmd.AddCommand(newMigrateCommand())
+	cmd.AddCommand(newSyncCommand(stdout, stderr))
 
 	return cmd
 }
