@@ -265,40 +265,6 @@ type transactionScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanTransaction(scanner transactionScanner) (domain.Transaction, error) {
-	var txn domain.Transaction
-	var amount string
-	var direction string
-	var raw []byte
-	if err := scanner.Scan(
-		&txn.ID,
-		&txn.AccountID,
-		&txn.PostedAt,
-		&amount,
-		&direction,
-		&txn.Description,
-		&txn.Merchant,
-		&txn.AkahuCategory,
-		&raw,
-		&txn.CreatedAt,
-		&txn.UpdatedAt,
-	); err != nil {
-		return domain.Transaction{}, err
-	}
-	money, err := domain.NewMoneyFromString(amount)
-	if err != nil {
-		return domain.Transaction{}, fmt.Errorf("parse transaction amount: %w", err)
-	}
-	parsedDirection, err := domain.ParseDirection(direction)
-	if err != nil {
-		return domain.Transaction{}, err
-	}
-	txn.Amount = money
-	txn.Direction = parsedDirection
-	txn.RawJSON = json.RawMessage(raw)
-	return txn, nil
-}
-
 func scanTxnReportRow(scanner transactionScanner) (ports.TxnReportRow, error) {
 	var row ports.TxnReportRow
 	var amount string

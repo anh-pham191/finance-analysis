@@ -4,7 +4,7 @@ Personal finance tool for NZ bank accounts. Connects to ANZ (Westpac later) via 
 
 CLI today, multi-user web service later. Hexagonal architecture, TDD throughout, written in Go.
 
-> **Status:** M3 categorisation implementation is in final verification. See [`docs/STATUS.md`](docs/STATUS.md) for what's next.
+> **Status:** M4 reporting implementation is in final verification. See [`docs/STATUS.md`](docs/STATUS.md) for what's next.
 
 ## What it does
 
@@ -54,6 +54,19 @@ go run ./cmd/cli uncategorised
 ```
 
 Write one rule in `config/rules.yaml`, rerun `go run ./cmd/cli categorise`, then run `go run ./cmd/cli uncategorised` again. The uncategorised count should shrink when the new rule matches existing transactions.
+
+## M4 Reporting Smoke Test
+
+After syncing and categorising local data, run the reporting commands with `.env` loaded:
+
+```bash
+set -a; . ./.env; set +a
+go run ./cmd/cli summary --period this-month
+go run ./cmd/cli compare --mom
+go run ./cmd/cli txns --period this-month --limit 20 --sort date
+```
+
+For a real-data spot check, compare the month-on-month figures against a small manual sample from the database or bank export before marking M4 complete.
 
 ## Documentation
 

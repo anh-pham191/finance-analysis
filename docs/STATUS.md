@@ -2,19 +2,19 @@
 
 > Single source of truth for project state. Update this file every time the situation changes (new milestone started, plan written, milestone completed, decision made).
 
-**Last updated:** 2026-05-06 (M4 plan in progress)
+**Last updated:** 2026-05-06 (M4 final verification)
 
 ## Current state
 
-- **Phase:** M4 implementation plan in progress on `feature/m4-plan`.
-- **Code in repo:** M1, M2, and M3 are merged to `develop`; M4 reporting is ready for plan review.
+- **Phase:** M4 reporting implementation is in final verification on `feature/m4-reporting`.
+- **Code in repo:** M1, M2, and M3 are merged to `develop`; M4 reporting is implemented on the feature branch. Unit, integration, and lint verification are expected before PR review.
 - **Spec status:** `docs/superpowers/specs/2026-05-06-finance-analysis-design.md` — revised after review (RLS hardening, per-aggregate repos, M6 demoted, M8 split into M8a/M8b, akahu_tokens deferred to M8a, etc.). Approved by user.
 - **Architecture docs:** `docs/architecture/overview.md` and `docs/architecture/security.md` — current.
 - **Per-milestone briefs:** M1, M2, M3, M4, M5, M7, M8a, M8b under `docs/milestones/`. (No M6: Westpac is now a smoke-test acceptance under M2.)
 
 ## Next action
 
-Review the M4 implementation plan at `docs/superpowers/plans/2026-05-06-M4-reporting-plan.md`, then open a plan PR into `develop` before implementation starts.
+Finish M4 verification, including report smoke commands and any real-data spot checks, then open a PR into `develop`.
 
 ## Branching
 
@@ -33,7 +33,7 @@ This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branc
 | M1 | Skeleton & DB (RLS hardened) | ✅ written | ✅ written | ✅ complete |
 | M2 | Akahu ingest (incl. Westpac smoke-test) | ✅ written | ✅ written | ✅ complete |
 | M3 | Categorisation | ✅ written | ✅ complete | ✅ complete |
-| M4 | Reporting MVP | ✅ written | 🚧 in progress | ⏳ |
+| M4 | Reporting MVP | ✅ written | ✅ written | 🚧 final verification |
 | M5 | Polish | ✅ written | ⏳ | ⏳ |
 | M7 | HTTP API (Authenticator port) | ✅ written | ⏳ | ⏳ |
 | M8a | Auth & encrypted token store | ✅ written | ⏳ | ⏳ |
