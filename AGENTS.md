@@ -85,6 +85,56 @@ Enforced from M1 by `internal/archtest/archtest_test.go` (fails CI on regression
 - No ticket prefix needed for this personal project; plain imperative subjects are fine.
 - Co-Authored-By trailer when an AI assistant materially contributed.
 
+## Operations cheat sheet (running the app day-to-day)
+
+This is the lifecycle for a single user (`user_id = 1`) on a local Postgres. All commands run from the repo root and need `.env` populated (`DATABASE_URL_APP`, Akahu tokens). Use `set -a; source .env; set +a` first if your shell hasn't loaded it.
+
+### When to run what
+
+| Goal | Command | When |
+| --- | --- | --- |
+| Bring DB up | `make db-up` | Once per machine boot, or after `db-down` |
+| Apply schema migrations | `make migrate` | After pulling changes that add migrations |
+| Pull fresh transactions from Akahu | `go run ./cmd/cli sync` | Whenever you want recent activity (incremental: last sync − 24 h) |
+| Backfill historical transactions | `go run ./cmd/cli sync --from YYYY-MM-DD` | One-off: first run, or after extending the desired window |
+| Apply categorisation rules | `go run ./cmd/cli categorise` | After `sync`, or after editing `config/rules.yaml` / `config/categories.yaml` |
+| List remaining uncategorised | `go run ./cmd/cli uncategorised` | To check rule coverage after `categorise` |
+| Reports | `go run ./cmd/cli {summary,compare,txns} [--period ...]` | Anytime; data reflects the last `sync` + `categorise` |
+
+### Typical "refresh" cycle
+
+```bash
+make db-up                                         # if not running
+go run ./cmd/cli sync                              # pull new txns
+go run ./cmd/cli categorise                        # apply rules
+go run ./cmd/cli summary --period this-month       # eyeball the result
+```
+
+If rules or categories changed, edit `config/rules.yaml` / `config/categories.yaml`, then re-run `categorise` (idempotent — safe to re-run).
+
+### Claude Desktop MCP server
+
+The MCP server in `cmd/mcp/` exposes the reporting commands (`summary`, `compare`, `list_txns`, `list_uncategorised`, `list_categories`) read-only over stdio for Claude Desktop.
+
+Install / refresh after any change to `cmd/mcp/` or after rotating creds in `.env`:
+
+```bash
+make mcp-install        # builds binary, syncs to ~/bin, copies env to ~/.config/finance-mcp/env
+# then quit & reopen Claude Desktop so it re-spawns the server
+```
+
+Files this places (outside the repo) and why:
+- `~/bin/finance-mcp` — built binary (must live outside `~/Documents` because macOS TCC blocks Claude Desktop from `exec`ing files there).
+- `~/bin/finance-mcp-launch.sh` — launcher; sources the env file and execs the binary.
+- `~/.config/finance-mcp/env` (mode `0600`) — DB URL only. Outside `~/Documents` for the same TCC reason. Re-derived from repo `.env` on every `make mcp-install`.
+- `~/Library/Application Support/Claude/claude_desktop_config.json` — `mcpServers.finance-analysis.command` points at the launcher.
+
+If Claude Desktop logs `Operation not permitted` on launch, almost always the binary or env file has drifted back inside `~/Documents`. Run `make mcp-install` again.
+
+### Write operations are CLI-only by design
+
+The MCP server is read-only. `sync`, `categorise`, `recat`, `unrecat`, and `migrate` are CLI-only — Claude Desktop cannot trigger them. If you want Claude to refresh data, run the CLI in a terminal first, then ask it to query.
+
 ## What to do when you arrive
 
 1. Read [`docs/STATUS.md`](docs/STATUS.md) to find out what's next.
