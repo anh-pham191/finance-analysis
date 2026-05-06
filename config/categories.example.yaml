@@ -1,0 +1,14 @@
+- name: Income/Salary
+  kind: income
+- name: Food
+  kind: expense
+- name: Food/Groceries
+  kind: expense
+  parent: Food
+- name: Food/Eating-out
+  kind: expense
+  parent: Food
+- name: Transfers
+  kind: transfer
+- name: Uncategorised
+  kind: expense

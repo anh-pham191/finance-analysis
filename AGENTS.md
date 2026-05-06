@@ -40,31 +40,42 @@ These are derived from [anh-pham191/development-rule](https://github.com/anh-pha
 
 ### Multi-tenancy invariants (apply from M1, even with one user)
 
-10. **Every user-owned table has `user_id`.** Migrations that omit it are wrong.
-11. **Every `Repository` method takes `userID UserID` as the first non-context arg.** No overload omits it.
-12. **Postgres RLS is enabled on every user-owned table.** The repository sets `app.user_id` per transaction.
-13. **Every new repository method ships with a cross-tenant integration test** asserting user A cannot read or write user B's rows. See spec §11.
+10. **Every user-owned table has `user_id` and `ON DELETE CASCADE` from `users`.** Migrations that omit either are wrong.
+11. **Every repository method takes `userID UserID` as the first non-context arg.** Per-aggregate ports (`AccountRepo`, `TxnRepo`, etc.) — not a single `Repository`. No overload omits `userID`.
+12. **Postgres RLS is FORCED on every user-owned table.** Without `FORCE`, table owners bypass. The app connects as `finance_app` (non-owner, no `BYPASSRLS`).
+13. **Every repo call runs inside `withUserTx`.** That helper is the single point that opens a tx and `SET LOCAL app.user_id = $userID`. Bypassing it silently breaks RLS.
+14. **Every new repository method ships with a cross-tenant integration test** asserting user A cannot read or write user B's rows. See spec §11.
+15. **`internal/archtest`** enforces the package import graph from M1. Don't disable it; fix the import.
 
 ### Code quality
 
-14. **YAGNI ruthlessly.** No abstractions, options, or flags that aren't needed by the current milestone. Three similar lines is better than a premature abstraction.
-15. **Composable over monolithic.** One clear purpose per package. If a file is hard to hold in your head, it's doing too much.
-16. **No comments unless the *why* is non-obvious.** Don't narrate what the code does.
-17. **No dead code, no half-finished implementations,** no backwards-compat shims for things that don't yet exist.
+16. **YAGNI ruthlessly.** No abstractions, options, or flags that aren't needed by the current milestone. Three similar lines is better than a premature abstraction.
+17. **Composable over monolithic.** One clear purpose per package. If a file is hard to hold in your head, it's doing too much.
+18. **No comments unless the *why* is non-obvious.** Don't narrate what the code does.
+19. **No dead code, no half-finished implementations,** no backwards-compat shims for things that don't yet exist.
 
 ### Workflow
 
-18. **TDD.** Write the failing test first. Make it pass with the smallest change. Refactor with the test green.
-19. **Red flags that mean "stop and ask":** the task seems to require editing an existing test to pass; the task seems to require relaxing a security invariant; the task seems to need a new top-level package outside the layout in `docs/architecture/overview.md`; the task seems to span multiple milestones at once.
-20. **NZ English** in docs and user-facing copy ("categorise", "behaviour", "colour").
+20. **TDD.** Write the failing test first. Make it pass with the smallest change. Refactor with the test green.
+21. **Branch off `develop`, PR into `develop`.** Never commit directly to `main` or `develop`. Branch names are `feature/<slug>`, `fix/<slug>`, `docs/<slug>`, or `chore/<slug>`. Releases happen via `develop → main` PRs. Full convention: [`docs/process/branching.md`](docs/process/branching.md).
+22. **Red flags that mean "stop and ask":** the task seems to require editing an existing test to pass; the task seems to require relaxing a security invariant; the task seems to need a new top-level package outside the layout in `docs/architecture/overview.md`; the task seems to span multiple milestones at once; the task seems to require disabling `archtest`.
+23. **NZ English** in docs and user-facing copy ("categorise", "behaviour", "colour").
+
+### Implementation cadence
+
+- Execute milestone implementation plans **one task per chat/session** by default. Do not run a 10+ task milestone as one long continuous agent session unless the user explicitly asks for that.
+- Each task ends with: red/green verification evidence, affected package tests, review gates where applicable, staged diff/stat, then a task-sized commit after human approval. If the user has explicitly approved "commit after each task" for the active session, that approval applies only to that session.
+- Do not start the next plan task until the current task has been committed or the user explicitly chooses to leave it uncommitted.
+- Keep commits task-sized. If review feedback changes a task, include the fixes in that same task commit before moving on.
 
 ## Forbidden imports
 
-Enforced by code review and (eventually) `go list` inspection in CI:
+Enforced from M1 by `internal/archtest/archtest_test.go` (fails CI on regression):
 
 - `internal/domain/` MUST NOT import any other internal package.
+- `internal/ports/` MUST NOT import any internal package other than `internal/domain/`.
 - `internal/{ingest,categorise,report}/` MUST NOT import `internal/akahu/` or `internal/storage/`.
-- `internal/{ingest,categorise,report}/` MUST NOT import `cobra` or `net/http`.
+- `internal/{ingest,categorise,report,render}/` MUST NOT import `cobra` or `net/http`.
 - No package outside `cmd/` and `internal/akahu/` may read environment variables directly.
 
 ## Commit conventions
@@ -78,10 +89,12 @@ Enforced by code review and (eventually) `go list` inspection in CI:
 
 1. Read [`docs/STATUS.md`](docs/STATUS.md) to find out what's next.
 2. Read the milestone doc for the current milestone.
-3. Re-read this file's hard rules.
+3. Re-read this file's hard rules and [`docs/process/branching.md`](docs/process/branching.md).
 4. Confirm the plan with the user before writing code (use the `superpowers:writing-plans` skill if available, or otherwise propose a plan in chat).
-5. Write the failing test. Then the code. Then refactor.
-6. Stage changes; **do not commit** until the user approves.
+5. **Branch off `develop`** with `feature/<slug>` (or `fix/<slug>` etc.).
+6. Write the failing test. Then the code. Then refactor.
+7. Stage changes; **do not commit** until the user approves.
+8. Push the branch and open a **PR against `develop`** following the description template in `docs/process/branching.md`.
 
 ## What NOT to do
 

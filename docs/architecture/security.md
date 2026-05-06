@@ -28,14 +28,26 @@ Out of scope (for now):
 
 ## Multi-tenancy from day 1
 
-Even though M1–M5 run with one user (`id=1`), the data model and ports are multi-tenant from the first migration:
+Even though M1–M5 run with one user (`id=1`), the data model and ports are multi-tenant from the first migration. The implementation discipline is non-negotiable because misconfigured RLS silently passes cross-tenant tests:
 
-- Every user-owned table has `user_id bigint NOT NULL` with an index.
-- Every `Repository` method takes `userID UserID` as the first non-context argument.
-- Postgres Row-Level Security policies enforce `user_id = current_setting('app.user_id')::bigint` on every user-owned table. The repository implementation calls `SET LOCAL app.user_id = $1` per transaction.
-- A mandatory cross-tenant test pattern (spec §11) runs for every new repository method.
+1. **Every user-owned table has `user_id bigint NOT NULL`** with an index, and (where the natural key is external) a composite PK including `user_id`.
+2. **`ON DELETE CASCADE` from `users`** on every owned row — single-statement user deletion.
+3. **RLS is enabled AND forced:**
+   ```sql
+   ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE <t> FORCE ROW LEVEL SECURITY;
+   CREATE POLICY <t>_tenant_isolation ON <t>
+     USING (user_id = current_setting('app.user_id')::bigint)
+     WITH CHECK (user_id = current_setting('app.user_id')::bigint);
+   ```
+   Without `FORCE`, the table owner bypasses the policy and tests pass with broken isolation.
+4. **The application connects as `finance_app`** — a dedicated non-owner role without `BYPASSRLS`. Migrations run as the owner; the app does not.
+5. **Every repo call runs in a tx** that begins with `SET LOCAL app.user_id = $userID`. `SET LOCAL` is transaction-scoped — outside a `BEGIN/COMMIT` it has no effect, and a connection-pool checkout must not inherit a previous user's setting. Enforced in one place: a `withUserTx(ctx, userID, fn)` helper in the postgres adapter; all queries go through it.
+6. **Per-aggregate repo ports** (`AccountRepo`, `TxnRepo`, ...). Each method takes `userID UserID` as the first non-context argument.
+7. **Mandatory cross-tenant test** (spec §11) for every new repository method.
+8. **Architecture test** (`internal/archtest`) ensures the import graph stays within the layout.
 
-This means M8 (real multi-user) does not require a schema migration or a domain rewrite — it adds auth, the `DBTokenStore`, and the registration flow on top of an already-correct foundation.
+Together these mean M8a (real multi-user) does not require a schema migration or a domain rewrite — it adds auth, `DBTokenStore`, and the registration flow on top of an already-correct foundation.
 
 ## Token storage
 
@@ -49,43 +61,62 @@ type TokenStore interface {
 
 Two implementations:
 
-### `EnvTokenStore` (M2–M7)
-Reads `AKAHU_APP_TOKEN` and `AKAHU_USER_TOKEN` from env. Returns the same tokens regardless of `userID` (acceptable while there is one user). Acceptable because the only deployment is the developer's own machine.
+### `EnvTokenStore` (M2 → M7)
+Reads `AKAHU_APP_TOKEN` and `AKAHU_USER_TOKEN` from env. Returns the same tokens regardless of `userID` — an intentional weakening of the multi-tenancy invariant for single-user MVP. M8a's cross-tenant tests for sync re-run with `DBTokenStore` to validate isolation under real multi-user.
 
-### `DBTokenStore` (M8)
-Tokens live in `akahu_tokens` table:
+### `DBTokenStore` (M8a)
+Tokens live in `akahu_tokens`:
 
-- `app_token_ciphertext bytea`
-- `user_token_ciphertext bytea`
-- `nonce bytea`
-- `updated_at timestamptz`
+```
+user_id bigint PK FK users(id) ON DELETE CASCADE
+app_token_ciphertext bytea
+app_token_nonce bytea
+user_token_ciphertext bytea
+user_token_nonce bytea
+key_version int NOT NULL DEFAULT 1
+updated_at timestamptz
+```
 
-Encryption: AES-256-GCM. Key from `KeyProvider` port:
+**Per-ciphertext nonces are mandatory.** Reusing a nonce with the same key across two plaintexts breaks AES-GCM catastrophically (the XOR of plaintexts becomes recoverable). The single-`nonce` schema from earlier drafts was wrong.
+
+Encryption: AES-256-GCM with random 96-bit nonces, fresh on every write.
+
+`KeyProvider` port:
 
 ```go
 type KeyProvider interface {
-    MasterKey(ctx context.Context) ([]byte, error)  // 32 bytes
+    MasterKey(ctx context.Context, version int) ([]byte, error)  // 32 bytes
 }
 ```
 
-- `EnvKeyProvider` — reads `FINANCE_MASTER_KEY` (base64). For self-hosted personal/family use.
-- `KMSKeyProvider` — wraps a cloud KMS (AWS / GCP / Cloudflare) decrypt call. For hosted multi-user.
+- `EnvKeyProvider` (M8a default) — reads `FINANCE_MASTER_KEY` (base64) for the current version, optionally `FINANCE_MASTER_KEY_v<n>` for prior versions during rotation.
+- `KMSKeyProvider` (M8b or later, when hosted) — wraps cloud KMS. Deferred until a hosting decision is made.
 
-Rotation: a new key version is added to the provider, all rows are re-encrypted in a background command (`finance admin rotate-keys`), the old key is retired. Schema includes `key_version` column on `akahu_tokens` to support concurrent rotation.
+### Rotation
+
+Online and concurrent-safe:
+
+1. Add new key as version `N+1` (e.g. `FINANCE_MASTER_KEY` rotates; previous value moves to `FINANCE_MASTER_KEY_v<N>`).
+2. `finance admin rotate-keys` walks `akahu_tokens` in chunks, `SELECT ... FOR UPDATE` per row, decrypts with the row's `key_version`, re-encrypts under `N+1`, updates row. Concurrent reads during rotation succeed because the decrypt path tries `MasterKey(ctx, row.key_version)` first.
+3. After all rows rotated, the old key value can be removed from the env / KMS.
+
+Decryption is the only place where multi-version awareness lives.
 
 ## Logging redaction
 
-Single `slog.Handler` wrapper applied at the root logger. `replace_attr` clears values for keys matching:
+Single `slog.Handler` wrapper applied at the root logger. Two layers:
 
-- `(?i)token`
-- `(?i)authorization`
-- `(?i)password`
-- `(?i)secret`
-- `(?i)api[_-]?key`
+1. **Key-side `replace_attr`** clears values for keys matching `(?i)token|authorization|password|secret|api[_-]?key`. Replaced values become `***`.
+2. **Value-side scanner** runs over any string-typed attr value and replaces token-shaped substrings — `(?i)\bbearer\s+\S+`, `(?i)\b(app|user)_token\s*[:=]\s*\S+`, base64-shaped strings ≥32 chars in error contexts. Catches the case where someone logs `slog.Info("got response", "body", string(respBody))` with an `Authorization: Bearer xxx` header in the body.
 
-Replaced values become the literal string `***`. Tested with golden tests on the handler.
+Tested with golden tests that:
+- Synthesise an HTTP error string containing a real-shaped bearer token, log it, capture output, assert the token is absent.
+- Log structured attrs with token-shaped keys; assert redaction.
+- Log a transaction struct (which would contain PII); assert it doesn't go through the standard handler — there's a `slog.LogValuer` on `domain.Transaction` returning `slog.Attr{Key: "txn_id", Value: ...}` only.
 
-PII redaction is policy, not infrastructure: developers must not log txn amounts, descriptions, or merchants. Reviewers reject PRs that do.
+PII redaction is **policy, not infrastructure**: developers must not log txn amounts, descriptions, or merchants. Reviewers reject PRs that do. The `LogValuer` on `Transaction` makes it hard to do accidentally — `slog.Info("found", "txn", t)` emits only the id, never the body.
+
+`raw_json` (the full Akahu payload stored in `transactions.raw_json`) **never enters logs or error chains**. Adapter parse-errors include the txn id only; parse-success drops the raw bytes after extracting fields. A unit test grep's the formatted-error paths to prove no `raw_json` references exist.
 
 ## Errors
 

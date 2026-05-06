@@ -1,0 +1,11 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${FINANCE_DB_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${FINANCE_DB_SUPERUSER_PASSWORD:-finance_local_superuser_password}
+      POSTGRES_DB: ${FINANCE_DB_NAME:-finance}
+    ports:
+      - "127.0.0.1:${FINANCE_DB_HOST_PORT:-15432}:5432"
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d:ro

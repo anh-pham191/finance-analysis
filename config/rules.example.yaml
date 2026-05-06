@@ -1,0 +1,18 @@
+- name: Salary
+  priority: 10
+  when:
+    direction: CREDIT
+    description_matches: "(?i)payroll|salary"
+  category: Income/Salary
+
+- name: Groceries
+  priority: 20
+  when:
+    merchant_in: ["Countdown", "Pak'nSave", "New World"]
+  category: Food/Groceries
+
+- name: Transfers between own accounts
+  priority: 5
+  when:
+    akahu_category: TRANSFER
+  category: Transfers
