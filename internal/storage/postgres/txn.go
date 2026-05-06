@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/anh-pham191/finance-analysis/internal/domain"
+	"github.com/anh-pham191/finance-analysis/internal/ports"
 )
 
 type TxnRepo struct {
@@ -151,4 +153,158 @@ func (r *TxnRepo) List(ctx context.Context, userID domain.UserID) ([]domain.Tran
 		return nil, fmt.Errorf("list transactions: %w", err)
 	}
 	return txns, nil
+}
+
+func (r *TxnRepo) ListFiltered(ctx context.Context, userID domain.UserID, filter ports.TxnFilter) ([]domain.Transaction, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var txns []domain.Transaction
+	err := withUserTx(ctx, r.db, userID, func(ctx context.Context, tx *sql.Tx) error {
+		orderBy, err := txnFilterOrderBy(filter.Sort)
+		if err != nil {
+			return err
+		}
+
+		joins := ""
+		where := []string{"t.user_id = $1"}
+		args := []any{userID.Int64()}
+		nextArg := 2
+
+		if !filter.Range.From.IsZero() {
+			where = append(where, fmt.Sprintf("t.posted_at >= $%d", nextArg))
+			args = append(args, filter.Range.From)
+			nextArg++
+		}
+		if !filter.Range.To.IsZero() {
+			where = append(where, fmt.Sprintf("t.posted_at < $%d", nextArg))
+			args = append(args, filter.Range.To)
+			nextArg++
+		}
+		if filter.CategoryID != nil {
+			joins = "JOIN category_assignments ca ON ca.user_id = t.user_id AND ca.txn_id = t.id"
+			where = append(where, fmt.Sprintf("ca.category_id = $%d", nextArg))
+			args = append(args, *filter.CategoryID)
+			nextArg++
+		}
+		if filter.Merchant != "" {
+			where = append(where, fmt.Sprintf("t.merchant = $%d", nextArg))
+			args = append(args, filter.Merchant)
+			nextArg++
+		}
+		if filter.AccountID != "" {
+			where = append(where, fmt.Sprintf("t.account_id = $%d", nextArg))
+			args = append(args, filter.AccountID)
+			nextArg++
+		}
+		if filter.Direction != nil {
+			where = append(where, fmt.Sprintf("t.direction = $%d", nextArg))
+			args = append(args, string(*filter.Direction))
+			nextArg++
+		}
+		if filter.Min != nil {
+			where = append(where, fmt.Sprintf("t.amount >= $%d", nextArg))
+			args = append(args, filter.Min.String())
+			nextArg++
+		}
+		if filter.Max != nil {
+			where = append(where, fmt.Sprintf("t.amount <= $%d", nextArg))
+			args = append(args, filter.Max.String())
+			nextArg++
+		}
+
+		limitArg := nextArg
+		args = append(args, limit)
+		nextArg++
+		offsetArg := nextArg
+		args = append(args, offset)
+
+		query := fmt.Sprintf(`
+			SELECT t.id, t.account_id, t.posted_at, t.amount::text, t.direction,
+				t.description, t.merchant, t.akahu_category, t.raw_json, t.created_at, t.updated_at
+			FROM transactions t
+			%s
+			WHERE %s
+			ORDER BY %s
+			LIMIT $%d OFFSET $%d
+		`, joins, strings.Join(where, " AND "), orderBy, limitArg, offsetArg)
+
+		rows, err := tx.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = rows.Close()
+		}()
+
+		for rows.Next() {
+			txn, err := scanTransaction(rows)
+			if err != nil {
+				return err
+			}
+			txns = append(txns, txn)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list filtered transactions: %w", err)
+	}
+	return txns, nil
+}
+
+type transactionScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanTransaction(scanner transactionScanner) (domain.Transaction, error) {
+	var txn domain.Transaction
+	var amount string
+	var direction string
+	var raw []byte
+	if err := scanner.Scan(
+		&txn.ID,
+		&txn.AccountID,
+		&txn.PostedAt,
+		&amount,
+		&direction,
+		&txn.Description,
+		&txn.Merchant,
+		&txn.AkahuCategory,
+		&raw,
+		&txn.CreatedAt,
+		&txn.UpdatedAt,
+	); err != nil {
+		return domain.Transaction{}, err
+	}
+	money, err := domain.NewMoneyFromString(amount)
+	if err != nil {
+		return domain.Transaction{}, fmt.Errorf("parse transaction amount: %w", err)
+	}
+	parsedDirection, err := domain.ParseDirection(direction)
+	if err != nil {
+		return domain.Transaction{}, err
+	}
+	txn.Amount = money
+	txn.Direction = parsedDirection
+	txn.RawJSON = json.RawMessage(raw)
+	return txn, nil
+}
+
+func txnFilterOrderBy(sort string) (string, error) {
+	switch sort {
+	case "", "date":
+		return "t.posted_at ASC, t.id ASC", nil
+	case "amount":
+		return "t.amount DESC, t.id ASC", nil
+	case "merchant":
+		return "t.merchant ASC, t.id ASC", nil
+	default:
+		return "", fmt.Errorf("invalid transaction sort %q", sort)
+	}
 }
