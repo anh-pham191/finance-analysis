@@ -25,7 +25,7 @@ func TestClientListAccountsSendsAuthHeadersAndMapsAccountFields(t *testing.T) {
 		if got, want := r.Header.Get("X-Akahu-ID"), "app_token_test"; got != want {
 			t.Fatalf("X-Akahu-ID = %q, want %q", got, want)
 		}
-		fmt.Fprint(w, `{"items":[{"_id":"acc_1","name":"Everyday","connection":{"name":"ANZ"},"type":"CHECKING","balance":{"currency":"NZD"}}],"cursor":{"next":""}}`)
+		_, _ = fmt.Fprint(w, `{"items":[{"_id":"acc_1","name":"Everyday","connection":{"name":"ANZ"},"type":"CHECKING","balance":{"currency":"NZD"}}],"cursor":{"next":""}}`)
 	}))
 	defer server.Close()
 
@@ -61,7 +61,7 @@ func TestClientFetchTransactionsIncludesAccountIDAndSinceAndMapsStringAmount(t *
 		if got, want := r.URL.Query().Get("start"), since.Format(time.RFC3339); got != want {
 			t.Fatalf("start = %q, want %q", got, want)
 		}
-		fmt.Fprint(w, `{"items":[{"_id":"txn_1","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":"-12.30","type":"DEBIT","description":"desc","merchant":{"name":"merchant"},"category":{"name":"FOOD"}}],"cursor":{"next":""}}`)
+		_, _ = fmt.Fprint(w, `{"items":[{"_id":"txn_1","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":"-12.30","type":"DEBIT","description":"desc","merchant":{"name":"merchant"},"category":{"name":"FOOD"}}],"cursor":{"next":""}}`)
 	}))
 	defer server.Close()
 
@@ -95,7 +95,7 @@ func TestClientFetchTransactionsMapsNumericAmount(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"items":[{"_id":"txn_1","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":-12.3,"type":"DEBIT"}],"cursor":{"next":""}}`)
+		_, _ = fmt.Fprint(w, `{"items":[{"_id":"txn_1","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":-12.3,"type":"DEBIT"}],"cursor":{"next":""}}`)
 	}))
 	defer server.Close()
 
@@ -118,9 +118,9 @@ func TestClientPaginationLoopsUntilCursorNextEmpty(t *testing.T) {
 		paths = append(paths, r.URL.RequestURI())
 		switch r.URL.RequestURI() {
 		case "/accounts/acc_1/transactions?start=2026-05-01T00%3A00%3A00Z":
-			fmt.Fprint(w, `{"items":[{"_id":"txn_1","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":"1.00","type":"CREDIT"}],"cursor":{"next":"next_page"}}`)
+			_, _ = fmt.Fprint(w, `{"items":[{"_id":"txn_1","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":"1.00","type":"CREDIT"}],"cursor":{"next":"next_page"}}`)
 		case "/accounts/acc_1/transactions?cursor=next_page&start=2026-05-01T00%3A00%3A00Z":
-			fmt.Fprint(w, `{"items":[{"_id":"txn_2","_account":"acc_1","date":"2026-05-02T00:00:00Z","amount":"2.00","type":"CREDIT"}],"cursor":{"next":""}}`)
+			_, _ = fmt.Fprint(w, `{"items":[{"_id":"txn_2","_account":"acc_1","date":"2026-05-02T00:00:00Z","amount":"2.00","type":"CREDIT"}],"cursor":{"next":""}}`)
 		default:
 			t.Fatalf("unexpected request URI %q", r.URL.RequestURI())
 		}
@@ -174,7 +174,7 @@ func TestClientMalformedTransactionResponseIncludesTxnIDAndOmitsRawBody(t *testi
 
 	const rawBodyContent = "raw_body_marker"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"items":[{"_id":"txn_bad","_account":"acc_1","date":"not-a-date","amount":"-12.30","description":%q}],"cursor":{"next":""}}`, rawBodyContent)
+		_, _ = fmt.Fprintf(w, `{"items":[{"_id":"txn_bad","_account":"acc_1","date":"not-a-date","amount":"-12.30","description":%q}],"cursor":{"next":""}}`, rawBodyContent)
 	}))
 	defer server.Close()
 
@@ -197,7 +197,7 @@ func TestClientMalformedTransactionAmountIncludesTxnIDAndOmitsRawBody(t *testing
 
 	const rawBodySecret = "raw_body_secret_marker"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"items":[{"_id":"txn_bad","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":{"secret":%q},"type":"DEBIT"}],"cursor":{"next":""}}`, rawBodySecret)
+		_, _ = fmt.Fprintf(w, `{"items":[{"_id":"txn_bad","_account":"acc_1","date":"2026-05-01T00:00:00Z","amount":{"secret":%q},"type":"DEBIT"}],"cursor":{"next":""}}`, rawBodySecret)
 	}))
 	defer server.Close()
 

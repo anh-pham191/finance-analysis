@@ -16,7 +16,7 @@ func (EnvTokenStore) AkahuTokens(ctx context.Context, userID domain.UserID) (str
 	app := os.Getenv("AKAHU_APP_TOKEN")
 	user := os.Getenv("AKAHU_USER_TOKEN")
 	if app == "" || user == "" {
-		return "", "", errors.New("Akahu tokens are not configured")
+		return "", "", errors.New("akahu tokens are not configured")
 	}
 	return app, user, nil
 }

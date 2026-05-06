@@ -68,7 +68,9 @@ func runSync(ctx context.Context, opts syncOptions) error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	baseURL, err := syncAkahuBaseURL(os.Getenv("AKAHU_BASE_URL"))
 	if err != nil {
