@@ -37,6 +37,16 @@ The plan should land at `docs/superpowers/plans/2026-05-06-M1-skeleton-and-db-pl
 
 Legend: ✅ done · ⏳ pending · 🚧 in progress · ❌ blocked.
 
+## Branching
+
+This project uses Git Flow-lite. See [`docs/process/branching.md`](process/branching.md) for the full convention.
+
+- `main` — stable; updated only via `develop → main` release PRs.
+- `develop` — integration; all work PRs merge here.
+- `feature/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` — branched off `develop`, PR'd into `develop`.
+
+**Never commit directly to `main` or `develop`.**
+
 ## Decisions log
 
 Record decisions made outside of the spec here so they survive across sessions and agents.
@@ -45,6 +55,7 @@ Record decisions made outside of the spec here so they survive across sessions a
 - **2026-05-06** — Multi-tenancy baked in from M1 (was originally going to be a non-goal). Triggered by user's "down the track people will authenticate their bank account" requirement.
 - **2026-05-06** — Postgres chosen over SQLite for forward compatibility with the multi-user web service.
 - **2026-05-06** — Akahu integration: on-demand pull only for MVP; webhooks deferred.
+- **2026-05-06** — Adopted Git Flow-lite branching: `main` / `develop` long-lived, `feature/*` and `fix/*` short-lived, all changes via PR. Convention in `docs/process/branching.md`.
 
 ## Open decisions (not blocking implementation)
 

@@ -55,8 +55,9 @@ These are derived from [anh-pham191/development-rule](https://github.com/anh-pha
 ### Workflow
 
 18. **TDD.** Write the failing test first. Make it pass with the smallest change. Refactor with the test green.
-19. **Red flags that mean "stop and ask":** the task seems to require editing an existing test to pass; the task seems to require relaxing a security invariant; the task seems to need a new top-level package outside the layout in `docs/architecture/overview.md`; the task seems to span multiple milestones at once.
-20. **NZ English** in docs and user-facing copy ("categorise", "behaviour", "colour").
+19. **Branch off `develop`, PR into `develop`.** Never commit directly to `main` or `develop`. Branch names are `feature/<slug>`, `fix/<slug>`, `docs/<slug>`, or `chore/<slug>`. Releases happen via `develop → main` PRs. Full convention: [`docs/process/branching.md`](docs/process/branching.md).
+20. **Red flags that mean "stop and ask":** the task seems to require editing an existing test to pass; the task seems to require relaxing a security invariant; the task seems to need a new top-level package outside the layout in `docs/architecture/overview.md`; the task seems to span multiple milestones at once.
+21. **NZ English** in docs and user-facing copy ("categorise", "behaviour", "colour").
 
 ## Forbidden imports
 
@@ -78,10 +79,12 @@ Enforced by code review and (eventually) `go list` inspection in CI:
 
 1. Read [`docs/STATUS.md`](docs/STATUS.md) to find out what's next.
 2. Read the milestone doc for the current milestone.
-3. Re-read this file's hard rules.
+3. Re-read this file's hard rules and [`docs/process/branching.md`](docs/process/branching.md).
 4. Confirm the plan with the user before writing code (use the `superpowers:writing-plans` skill if available, or otherwise propose a plan in chat).
-5. Write the failing test. Then the code. Then refactor.
-6. Stage changes; **do not commit** until the user approves.
+5. **Branch off `develop`** with `feature/<slug>` (or `fix/<slug>` etc.).
+6. Write the failing test. Then the code. Then refactor.
+7. Stage changes; **do not commit** until the user approves.
+8. Push the branch and open a **PR against `develop`** following the description template in `docs/process/branching.md`.
 
 ## What NOT to do
 
