@@ -1,0 +1,3 @@
+database:
+  owner_url: "postgres://finance_owner:finance_owner_local_dev_only@localhost:15432/finance?sslmode=disable"
+  app_url: "postgres://finance_app:finance_app_local_dev_only@localhost:15432/finance?sslmode=disable"

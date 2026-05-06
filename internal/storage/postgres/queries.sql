@@ -1,0 +1,2 @@
+-- SQL is kept here for the planned sqlc boundary. The current M1 adapter uses
+-- database/sql directly because sqlc generation is not yet wired into CI.
