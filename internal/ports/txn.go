@@ -9,4 +9,5 @@ import (
 type TxnRepo interface {
 	Upsert(ctx context.Context, userID domain.UserID, txn domain.Transaction) error
 	Get(ctx context.Context, userID domain.UserID, id string) (domain.Transaction, error)
+	List(ctx context.Context, userID domain.UserID) ([]domain.Transaction, error)
 }

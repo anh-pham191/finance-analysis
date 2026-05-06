@@ -23,9 +23,13 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.SetErr(stderr)
 	cmd.SetVersionTemplate("{{.Version}}\n")
 
+	cmd.AddCommand(newCategoriseCommand(stdout, stderr))
 	cmd.AddCommand(newHealthCommand(stdout))
 	cmd.AddCommand(newMigrateCommand())
+	cmd.AddCommand(newRecatCommand(stdout, stderr))
 	cmd.AddCommand(newSyncCommand(stdout, stderr))
+	cmd.AddCommand(newUncategorisedCommand(stdout, stderr))
+	cmd.AddCommand(newUnrecatCommand(stdout, stderr))
 
 	return cmd
 }

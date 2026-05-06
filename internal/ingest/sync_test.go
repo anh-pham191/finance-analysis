@@ -254,6 +254,10 @@ func (r *fakeTxnRepo) Get(context.Context, domain.UserID, string) (domain.Transa
 	return domain.Transaction{}, errors.New("unexpected txn get")
 }
 
+func (r *fakeTxnRepo) List(context.Context, domain.UserID) ([]domain.Transaction, error) {
+	return nil, nil
+}
+
 type fakeSyncStateRepo struct {
 	states  map[string]domain.SyncState
 	gets    []syncStateGet

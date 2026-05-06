@@ -78,7 +78,7 @@ func (r *TxnRepo) Get(ctx context.Context, userID domain.UserID, id string) (dom
 		)
 	})
 	if err != nil {
-		return domain.Transaction{}, err
+		return domain.Transaction{}, repoGetError(err)
 	}
 
 	money, err := domain.NewMoneyFromString(amount)
@@ -93,4 +93,62 @@ func (r *TxnRepo) Get(ctx context.Context, userID domain.UserID, id string) (dom
 	txn.Direction = parsedDirection
 	txn.RawJSON = json.RawMessage(raw)
 	return txn, nil
+}
+
+func (r *TxnRepo) List(ctx context.Context, userID domain.UserID) ([]domain.Transaction, error) {
+	var txns []domain.Transaction
+	err := withUserTx(ctx, r.db, userID, func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT id, account_id, posted_at, amount::text, direction,
+				description, merchant, akahu_category, raw_json, created_at, updated_at
+			FROM transactions
+			WHERE user_id = $1
+			ORDER BY posted_at ASC, id ASC
+		`, userID.Int64())
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = rows.Close()
+		}()
+
+		for rows.Next() {
+			var txn domain.Transaction
+			var amount string
+			var direction string
+			var raw []byte
+			if err := rows.Scan(
+				&txn.ID,
+				&txn.AccountID,
+				&txn.PostedAt,
+				&amount,
+				&direction,
+				&txn.Description,
+				&txn.Merchant,
+				&txn.AkahuCategory,
+				&raw,
+				&txn.CreatedAt,
+				&txn.UpdatedAt,
+			); err != nil {
+				return err
+			}
+			money, err := domain.NewMoneyFromString(amount)
+			if err != nil {
+				return fmt.Errorf("parse transaction amount: %w", err)
+			}
+			parsedDirection, err := domain.ParseDirection(direction)
+			if err != nil {
+				return err
+			}
+			txn.Amount = money
+			txn.Direction = parsedDirection
+			txn.RawJSON = json.RawMessage(raw)
+			txns = append(txns, txn)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list transactions: %w", err)
+	}
+	return txns, nil
 }
