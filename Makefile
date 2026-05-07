@@ -34,7 +34,7 @@ mcp-build:
 
 mcp-install: mcp-build
 	@mkdir -p $(dir $(MCP_ENV))
-	@grep -E '^(DATABASE_URL_APP|DATABASE_URL|AKAHU_BASE_URL)=' .env > $(MCP_ENV)
+	@grep -E '^(DATABASE_URL_APP|DATABASE_URL|AKAHU_BASE_URL|AKAHU_APP_TOKEN|AKAHU_USER_TOKEN)=' .env > $(MCP_ENV)
 	@chmod 600 $(MCP_ENV)
 	@cp bin/finance-mcp-launch.sh $(MCP_LAUNCHER)
 	@chmod +x $(MCP_LAUNCHER)
