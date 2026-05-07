@@ -10,10 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"time"
 
+	"github.com/anh-pham191/finance-analysis/internal/akahu"
 	"github.com/anh-pham191/finance-analysis/internal/domain"
+	"github.com/anh-pham191/finance-analysis/internal/ingest"
+	"github.com/anh-pham191/finance-analysis/internal/ports"
 	"github.com/anh-pham191/finance-analysis/internal/render"
 	"github.com/anh-pham191/finance-analysis/internal/report"
 	"github.com/anh-pham191/finance-analysis/internal/storage/postgres"
@@ -79,6 +83,24 @@ func main() {
 		Name:        "list_categories",
 		Description: "List all configured categories with their kinds and parents.",
 	}, s.listCategories)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "assign_category",
+		Description: "Assign a transaction to a category as a manual override. " +
+			"The category must already exist (see list_categories).",
+	}, s.assignCategory)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "upsert_category",
+		Description: "Create or update a category. Kind must be 'income', 'expense', or 'transfer'. " +
+			"Optional 'parent' is the name of an existing parent category.",
+	}, s.upsertCategory)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "sync",
+		Description: "Sync accounts and transactions from Akahu. " +
+			"Optional 'from' (YYYY-MM-DD) bounds the transaction window.",
+	}, s.sync)
 
 	if err := mcpServer.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatalf("mcp server: %v", err)
@@ -257,6 +279,133 @@ func (s *server) listCategories(ctx context.Context, _ *mcp.CallToolRequest, _ e
 	}
 	return jsonResult(rows)
 }
+
+type assignCategoryInput struct {
+	TxnID    string `json:"txn_id" jsonschema:"transaction ID to categorise"`
+	Category string `json:"category" jsonschema:"category name (must already exist)"`
+}
+
+func (s *server) assignCategory(ctx context.Context, _ *mcp.CallToolRequest, in assignCategoryInput) (*mcp.CallToolResult, textOutput, error) {
+	if in.TxnID == "" {
+		return nil, textOutput{}, errors.New("txn_id is required")
+	}
+	if in.Category == "" {
+		return nil, textOutput{}, errors.New("category is required")
+	}
+	category, err := postgres.NewCategoryRepo(s.db).GetByName(ctx, userID, in.Category)
+	if err != nil {
+		return nil, textOutput{}, fmt.Errorf("get category %q: %w", in.Category, err)
+	}
+	changed, err := postgres.NewAssignmentRepo(s.db).UpsertIfChanged(ctx, userID, domain.CategoryAssignment{
+		TxnID:      in.TxnID,
+		CategoryID: category.ID,
+		Source:     domain.AssignmentSourceManual,
+		RuleID:     nil,
+	})
+	if err != nil {
+		return nil, textOutput{}, fmt.Errorf("set manual assignment: %w", err)
+	}
+	return jsonResult(map[string]any{
+		"txn_id":      in.TxnID,
+		"category_id": category.ID,
+		"category":    category.Name,
+		"source":      string(domain.AssignmentSourceManual),
+		"changed":     changed,
+	})
+}
+
+type upsertCategoryInput struct {
+	Name   string `json:"name" jsonschema:"category name"`
+	Kind   string `json:"kind" jsonschema:"category kind: income, expense, or transfer"`
+	Parent string `json:"parent,omitempty" jsonschema:"name of an existing parent category"`
+}
+
+func (s *server) upsertCategory(ctx context.Context, _ *mcp.CallToolRequest, in upsertCategoryInput) (*mcp.CallToolResult, textOutput, error) {
+	if in.Name == "" {
+		return nil, textOutput{}, errors.New("name is required")
+	}
+	kind := domain.CategoryKind(in.Kind)
+	switch kind {
+	case domain.CategoryKindIncome, domain.CategoryKindExpense, domain.CategoryKindTransfer:
+	default:
+		return nil, textOutput{}, fmt.Errorf("kind must be income, expense, or transfer (got %q)", in.Kind)
+	}
+
+	repo := postgres.NewCategoryRepo(s.db)
+	var parentID *int64
+	if in.Parent != "" {
+		parent, err := repo.GetByName(ctx, userID, in.Parent)
+		if err != nil {
+			return nil, textOutput{}, fmt.Errorf("get parent %q: %w", in.Parent, err)
+		}
+		parentID = &parent.ID
+	}
+	upserted, err := repo.Upsert(ctx, userID, domain.Category{
+		Name:     in.Name,
+		Kind:     kind,
+		ParentID: parentID,
+	})
+	if err != nil {
+		return nil, textOutput{}, fmt.Errorf("upsert category: %w", err)
+	}
+	return jsonResult(map[string]any{
+		"id":        upserted.ID,
+		"name":      upserted.Name,
+		"kind":      string(upserted.Kind),
+		"parent_id": upserted.ParentID,
+	})
+}
+
+type syncInput struct {
+	From string `json:"from,omitempty" jsonschema:"sync transactions from this date (YYYY-MM-DD)"`
+}
+
+func (s *server) sync(ctx context.Context, _ *mcp.CallToolRequest, in syncInput) (*mcp.CallToolResult, textOutput, error) {
+	var from *time.Time
+	if in.From != "" {
+		t, err := time.Parse("2006-01-02", in.From)
+		if err != nil {
+			return nil, textOutput{}, errors.New("from must be YYYY-MM-DD")
+		}
+		from = &t
+	}
+
+	baseURL := os.Getenv("AKAHU_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.akahu.io/v1"
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return nil, textOutput{}, errors.New("AKAHU_BASE_URL is invalid")
+	}
+
+	deps := ingest.Deps{
+		Accounts:   postgres.NewAccountRepo(s.db),
+		Txns:       postgres.NewTxnRepo(s.db),
+		SyncStates: postgres.NewSyncStateRepo(s.db),
+		Tokens:     akahu.EnvTokenStore{},
+		NewAkahuClient: func(appToken, userToken string) ports.AkahuClient {
+			return akahu.NewClient(akahu.Config{
+				AppToken:  appToken,
+				UserToken: userToken,
+				BaseURL:   baseURL,
+			})
+		},
+		Clock: systemClock{},
+	}
+	result, err := ingest.Sync(ctx, userID, deps, ingest.Options{From: from})
+	if err != nil {
+		return nil, textOutput{}, err
+	}
+	return jsonResult(map[string]any{
+		"accounts":     result.Accounts,
+		"transactions": result.Transactions,
+	})
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time { return time.Now() }
 
 func (s *server) resolvePeriod(value string) (domain.Range, error) {
 	if value == "" {
